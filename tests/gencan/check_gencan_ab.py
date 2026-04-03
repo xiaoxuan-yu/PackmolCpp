@@ -43,6 +43,8 @@ def _run_probe(probe: pathlib.Path, input_path: pathlib.Path, mode: str, workdir
     env["PACKMOL_GENCAN_IMPL"] = mode
     # Keep AB parity checks pinned to legacy-compatible numeric accumulation mode.
     env["PACKMOL_GENCAN_NUMERIC_CPP"] = "0"
+    if mode != "fortran":
+        env["PACKMOL_GENCAN_AB_COMPARE"] = "1"
     completed = subprocess.run(
         [str(probe), str(input_path)],
         cwd=workdir,

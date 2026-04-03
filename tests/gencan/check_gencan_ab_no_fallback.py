@@ -57,11 +57,16 @@ def main() -> int:
         cpp_output = _run_probe(probe, staged_input, "cpp", tmpdir)
         ab_output = _run_probe(probe, staged_input, "ab", tmpdir)
 
-        marker = "gencan-cpp-fallback"
+        marker = "[gencan-cpp-fallback]"
         if marker in cpp_output:
             raise RuntimeError("fallback marker observed in cpp mode")
         if marker in ab_output:
             raise RuntimeError("fallback marker observed in ab mode")
+        missing_reason_marker = "[gencan-cpp-missing-tail-reason]"
+        if missing_reason_marker in cpp_output:
+            raise RuntimeError("missing tail reason marker observed in cpp mode")
+        if missing_reason_marker in ab_output:
+            raise RuntimeError("missing tail reason marker observed in ab mode")
 
     return 0
 

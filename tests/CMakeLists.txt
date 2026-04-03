@@ -342,7 +342,6 @@ set_tests_properties(
     test_easygencan_ab_draft
     PROPERTIES
         LABELS "gencan;gencan_ab;gencan_draft"
-        ENVIRONMENT "PACKMOL_GENCAN_EASY_CPP_DRAFT=1"
 )
 add_test(
     NAME test_easygencan_ab_fallback
@@ -352,8 +351,7 @@ add_test(
 set_tests_properties(
     test_easygencan_ab_fallback
     PROPERTIES
-        LABELS "gencan;gencan_ab;gencan_fallback"
-        ENVIRONMENT "PACKMOL_GENCAN_EASY_CPP_DRAFT=0"
+        LABELS "gencan;gencan_ab;gencan_closure"
 )
 add_executable(test_gencan_runtime_driver_probe gencan/test_gencan_runtime_driver_probe.f90)
 target_link_libraries(test_gencan_runtime_driver_probe PRIVATE packmol_test_support packmol_core)
@@ -596,13 +594,22 @@ set_tests_properties(
         LABELS "gencan;gencan_draft;gencan_closure"
 )
 add_test(
-    NAME test_gencan_tn_handoff_unsafe_legacy_off_closure
-    COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tests/gencan/check_tn_handoff_unsafe_legacy_off.py
+    NAME test_gencan_handoff_cpp_tail_draft
+    COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tests/gencan/check_handoff_cpp_tail_draft.py
 )
 set_tests_properties(
-    test_gencan_tn_handoff_unsafe_legacy_off_closure
+    test_gencan_handoff_cpp_tail_draft
     PROPERTIES
-        LABELS "gencan;gencan_draft;gencan_closure"
+        LABELS "gencan;gencan_draft;migration_probe"
+)
+add_test(
+    NAME test_gencan_spg_post_nested_tn_cpp_tail_report
+    COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tests/gencan/check_spg_post_nested_tn_cpp_tail_report.py
+)
+set_tests_properties(
+    test_gencan_spg_post_nested_tn_cpp_tail_report
+    PROPERTIES
+        LABELS "gencan;gencan_draft;migration_probe"
 )
 add_test(
     NAME test_gencan_ab_tn_draft
@@ -659,6 +666,60 @@ set_tests_properties(
         ENVIRONMENT "PACKMOL_GENCAN_SPG_POST_RETRY=1"
 )
 add_test(
+    NAME test_gencan_cpp_tail_block_smoke
+    COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tests/gencan/check_gencan_fortran_tail_block_smoke.py
+)
+set_tests_properties(
+    test_gencan_cpp_tail_block_smoke
+    PROPERTIES
+        LABELS "gencan;gencan_draft;gencan_closure;migration_probe"
+)
+add_test(
+    NAME test_gencan_cpp_tail_block_multistep_smoke
+    COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tests/gencan/check_gencan_fortran_tail_block_multistep_smoke.py
+)
+set_tests_properties(
+    test_gencan_cpp_tail_block_multistep_smoke
+    PROPERTIES
+        LABELS "gencan;gencan_draft;gencan_closure;migration_probe"
+)
+add_test(
+    NAME test_gencan_spg_post_no_fortran_tail_cpp_closure
+    COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tests/gencan/check_spg_post_no_fortran_tail_cpp_closure.py
+)
+set_tests_properties(
+    test_gencan_spg_post_no_fortran_tail_cpp_closure
+    PROPERTIES
+        LABELS "gencan;gencan_draft;gencan_closure;migration_probe"
+)
+add_test(
+    NAME test_gencan_tn_post_no_fortran_tail_cpp_closure
+    COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tests/gencan/check_tn_post_no_fortran_tail_cpp_closure.py
+)
+set_tests_properties(
+    test_gencan_tn_post_no_fortran_tail_cpp_closure
+    PROPERTIES
+        LABELS "gencan;gencan_draft;gencan_closure;migration_probe"
+)
+add_test(
+    NAME test_gencan_cpp_tail_reduction_draft
+    COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tests/gencan/check_gencan_cpp_tail_reduction_draft.py
+)
+set_tests_properties(
+    test_gencan_cpp_tail_reduction_draft
+    PROPERTIES
+        LABELS "gencan;gencan_draft;gencan_closure;migration_probe"
+)
+add_test(
+    NAME test_gencan_tn_post_ab_init1_no_replay
+    COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tests/gencan/check_tn_post_ab_init1_no_replay.py
+)
+set_tests_properties(
+    test_gencan_tn_post_ab_init1_no_replay
+    PROPERTIES
+        LABELS "gencan;gencan_draft;gencan_closure;migration_probe"
+)
+add_test(
     NAME test_gencan_no_fallback_matrix_closure
     COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tests/gencan/check_gencan_no_fallback_matrix.py
 )
@@ -668,14 +729,13 @@ set_tests_properties(
         LABELS "gencan;gencan_draft;gencan_closure"
 )
 add_test(
-    NAME test_gencan_no_fallback_matrix_legacy_tail_off_closure
-    COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tests/gencan/check_gencan_no_fallback_matrix.py
+    NAME test_gencan_cpp_tail_blocked_closure
+    COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tests/gencan/check_gencan_legacy_tail_off_cpp_tail.py
 )
 set_tests_properties(
-    test_gencan_no_fallback_matrix_legacy_tail_off_closure
+    test_gencan_cpp_tail_blocked_closure
     PROPERTIES
         LABELS "migration_probe"
-        ENVIRONMENT "PACKMOL_GENCAN_DISABLE_LEGACY_FORTRAN_FALLBACK=1"
 )
 add_test(
     NAME test_gencan_no_fallback_matrix_ab_drift
@@ -685,7 +745,17 @@ set_tests_properties(
     test_gencan_no_fallback_matrix_ab_drift
     PROPERTIES
         LABELS "migration_probe"
-        ENVIRONMENT "PACKMOL_GENCAN_DISABLE_LEGACY_FORTRAN_FALLBACK=1;PACKMOL_GENCAN_AB_COMPARE=1"
+        ENVIRONMENT "PACKMOL_GENCAN_AB_COMPARE=1"
+)
+add_test(
+    NAME test_gencan_no_fallback_matrix_block_tail_closure
+    COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tests/gencan/check_gencan_no_fallback_matrix.py
+)
+set_tests_properties(
+    test_gencan_no_fallback_matrix_block_tail_closure
+    PROPERTIES
+        LABELS "migration_probe"
+        ENVIRONMENT "PACKMOL_GENCAN_BLOCK_CPP_TAIL=1"
 )
 add_test(
     NAME test_gencan_no_fallback_matrix_ab_drift_report
@@ -696,7 +766,7 @@ set_tests_properties(
     test_gencan_no_fallback_matrix_ab_drift_report
     PROPERTIES
         LABELS "migration_probe"
-        ENVIRONMENT "PACKMOL_GENCAN_DISABLE_LEGACY_FORTRAN_FALLBACK=1;PACKMOL_GENCAN_AB_COMPARE=1;PACKMOL_GENCAN_AB_COMPARE_REPORT=1"
+        ENVIRONMENT "PACKMOL_GENCAN_AB_COMPARE=1;PACKMOL_GENCAN_AB_COMPARE_REPORT=1"
 )
 packmol_add_test(test_easygencan gencan/test_easygencan.f90 gencan)
 packmol_add_test(test_gencan_driver gencan/test_gencan_driver.f90 gencan)

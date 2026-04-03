@@ -1,6 +1,7 @@
 subroutine easygencan(n, x, l, u, m, lambda, rho, epsgpsn, maxit, maxfc, trtype, iprint, ncomp, &
    f, g, gpsupn, iter, fcnt, gcnt, cgcnt, inform, wi, wd, delmin)
    use iso_c_binding, only : c_int, c_double
+   use compute_data, only : init1
    implicit none
 
    integer, intent(in) :: n, m, maxit, maxfc, trtype, iprint, ncomp
@@ -9,8 +10,14 @@ subroutine easygencan(n, x, l, u, m, lambda, rho, epsgpsn, maxit, maxfc, trtype,
    double precision, intent(inout) :: x(n), f, g(n), wd(8 * n), delmin
    double precision, intent(in) :: l(n), u(n), lambda(m), rho(m), epsgpsn
    double precision, intent(out) :: gpsupn
+   integer(c_int) :: init1_flag
 
    interface
+      subroutine packmol_gencan_set_init1_phase_c(flag) bind(C, name="packmol_gencan_set_init1_phase_c")
+         import :: c_int
+         integer(c_int), intent(in) :: flag
+      end subroutine packmol_gencan_set_init1_phase_c
+
       subroutine packmol_gencan_easy_bridge(n, x, l, u, m, lambda, rho, epsgpsn, maxit, maxfc, trtype, &
          iprint, ncomp, f, g, gpsupn, iter, fcnt, gcnt, cgcnt, inform, wi, wd, delmin) &
          bind(C, name="packmol_gencan_easy_bridge")
@@ -24,6 +31,12 @@ subroutine easygencan(n, x, l, u, m, lambda, rho, epsgpsn, maxit, maxfc, trtype,
       end subroutine packmol_gencan_easy_bridge
    end interface
 
+   if (init1) then
+      init1_flag = 1_c_int
+   else
+      init1_flag = 0_c_int
+   end if
+   call packmol_gencan_set_init1_phase_c(init1_flag)
    call packmol_gencan_easy_bridge(n, x, l, u, m, lambda, rho, epsgpsn, maxit, maxfc, trtype, &
       iprint, ncomp, f, g, gpsupn, iter, fcnt, gcnt, cgcnt, inform, wi, wd, delmin)
 end subroutine easygencan
@@ -35,10 +48,12 @@ subroutine gencan(n, x, l, u, m, lambda, rho, epsgpen, epsgpsn, maxitnfp, epsnfp
    tnexbfe, inform, s, y, d, ind, lastgpns, w, eta, delmin, lspgma, lspgmi, theta, gamma, beta, sigma1, &
    sigma2, sterel, steabs, epsrel, epsabs, infrel, infabs)
    use iso_c_binding, only : c_int, c_double, c_bool
+   use compute_data, only : init1
    implicit none
 
    logical, intent(in) :: nearlyq
    logical(c_bool) :: nearlyq_c
+   integer(c_int) :: init1_flag
    integer, intent(in) :: n, m, maxitnfp, maxitngp, maxit, maxfc, ucgmaxit, cgscre, maxitnqmp, mininterp
    integer, intent(in) :: maxextrap, gtype, htvtype, trtype, iprint, ncomp
    integer, intent(inout) :: iter, fcnt, gcnt, cgcnt, spgiter, spgfcnt, tniter, tnfcnt, tnstpcnt, tnintcnt
@@ -53,6 +68,11 @@ subroutine gencan(n, x, l, u, m, lambda, rho, epsgpen, epsgpsn, maxitnfp, epsnfp
    double precision, intent(in) :: infrel, infabs
 
    interface
+      subroutine packmol_gencan_set_init1_phase_c(flag) bind(C, name="packmol_gencan_set_init1_phase_c")
+         import :: c_int
+         integer(c_int), intent(in) :: flag
+      end subroutine packmol_gencan_set_init1_phase_c
+
       subroutine packmol_gencan_gencan_bridge(n, x, l, u, m, lambda, rho, epsgpen, epsgpsn, maxitnfp, epsnfp, &
          maxitngp, fmin, maxit, maxfc, udelta0, ucgmaxit, cgscre, cggpnf, cgepsi, cgepsf, epsnqmp, maxitnqmp, &
          nearlyq, nint, next, mininterp, maxextrap, gtype, htvtype, trtype, iprint, ncomp, f, g, gpeucn2, &
@@ -77,6 +97,12 @@ subroutine gencan(n, x, l, u, m, lambda, rho, epsgpen, epsgpsn, maxitnfp, epsnfp
    end interface
 
    nearlyq_c = nearlyq
+   if (init1) then
+      init1_flag = 1_c_int
+   else
+      init1_flag = 0_c_int
+   end if
+   call packmol_gencan_set_init1_phase_c(init1_flag)
 
    call packmol_gencan_gencan_bridge(n, x, l, u, m, lambda, rho, epsgpen, epsgpsn, maxitnfp, epsnfp, maxitngp, &
       fmin, maxit, maxfc, udelta0, ucgmaxit, cgscre, cggpnf, cgepsi, cgepsf, epsnqmp, maxitnqmp, nearlyq_c, &

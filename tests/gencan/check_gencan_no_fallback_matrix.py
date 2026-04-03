@@ -80,7 +80,6 @@ def _run_probe(
     workdir: pathlib.Path,
     *,
     impl_mode: str,
-    disable_legacy_tail_fallback: bool,
 ) -> str:
     env = os.environ.copy()
     env.update({
@@ -94,8 +93,6 @@ def _run_probe(
         "PACKMOL_GENCAN_TN_POST_CPP_HANDOFF_CPP_REPLAY": "1",
         "PACKMOL_GENCAN_DEBUG": "1",
     })
-    if disable_legacy_tail_fallback:
-        env["PACKMOL_GENCAN_DISABLE_LEGACY_FORTRAN_FALLBACK"] = "1"
     completed = subprocess.run(
         [str(probe), str(staged_input)],
         cwd=workdir,
@@ -275,10 +272,6 @@ def main() -> int:
     report_path = pathlib.Path(args.report_out) if args.report_out else None
     report_records: list[dict[str, object]] = []
 
-    disable_legacy_tail_fallback = os.environ.get(
-        "PACKMOL_GENCAN_DISABLE_LEGACY_FORTRAN_FALLBACK",
-        "0",
-    ) in {"1", "true", "TRUE", "on", "ON", "yes", "YES"}
     ab_compare_enabled = os.environ.get(
         "PACKMOL_GENCAN_AB_COMPARE",
         "0",
@@ -302,14 +295,15 @@ def main() -> int:
                 staged_input,
                 tmpdir,
                 impl_mode="cpp",
-                disable_legacy_tail_fallback=disable_legacy_tail_fallback,
             )
             if "[gencan-cpp-fallback]" in output:
                 raise RuntimeError(f"{probe_name}: unexpected fallback marker")
             if "[gencan-cpp-fallback-blocked]" in output:
                 raise RuntimeError(f"{probe_name}: unexpected blocked-fallback marker")
-            if disable_legacy_tail_fallback and "[gencan-cpp-fortran-tail]" in output:
-                raise RuntimeError(f"{probe_name}: unexpected fortran-tail marker")
+            if "[gencan-cpp-missing-tail-reason]" in output:
+                raise RuntimeError(f"{probe_name}: missing tail reason marker")
+            if "[gencan-cpp-fortran-tail]" in output:
+                raise RuntimeError(f"{probe_name}: stale fortran-tail marker observed")
             if "[gencan-cpp-handoff-canonicalize-fortran]" in output:
                 raise RuntimeError(f"{probe_name}: unexpected fortran canonicalize marker")
             cpp_summary = _assert_summary_sane(probe_name, output)
@@ -319,7 +313,6 @@ def main() -> int:
                     staged_input,
                     tmpdir,
                     impl_mode="fortran",
-                    disable_legacy_tail_fallback=False,
                 )
                 fortran_summary = _parse_summary(fortran_output)
                 if cpp_summary is None or fortran_summary is None:

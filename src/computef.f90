@@ -163,3 +163,17 @@ subroutine packmol_computef_fortran_c(n, x, f) bind(C, name="packmol_computef_fo
 
    call computef(n, x, f)
 end subroutine packmol_computef_fortran_c
+
+subroutine packmol_init1_state_fortran_c(flag) bind(C, name="packmol_init1_state_fortran_c")
+   use iso_c_binding, only : c_int
+   use compute_data, only : init1
+   implicit none
+
+   integer(c_int), intent(out) :: flag
+
+   if (init1) then
+      flag = 1_c_int
+   else
+      flag = 0_c_int
+   end if
+end subroutine packmol_init1_state_fortran_c

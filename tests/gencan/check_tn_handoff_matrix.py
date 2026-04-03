@@ -48,14 +48,11 @@ def _run_probe(
     cpp_replay: bool = False,
     max_depth: int = 1,
     unsafe: bool = True,
-    disable_legacy_tail_fallback: bool = False,
 ) -> tuple[dict[str, float | int], str]:
     env = os.environ.copy()
     env["PACKMOL_GENCAN_IMPL"] = mode
     env["PACKMOL_GENCAN_NUMERIC_CPP"] = "0"
     env["PACKMOL_GENCAN_DEBUG"] = "1"
-    if disable_legacy_tail_fallback:
-        env["PACKMOL_GENCAN_DISABLE_LEGACY_FORTRAN_FALLBACK"] = "1"
     if handoff:
         env["PACKMOL_GENCAN_TN_POST_CPP_HANDOFF"] = "1"
         env["PACKMOL_GENCAN_TN_POST_CPP_HANDOFF_UNSAFE"] = "1" if unsafe else "0"
@@ -122,7 +119,7 @@ def main() -> int:
             nocanon, _ = _run_probe(
                 probe, staged_input, tmpdir, mode="cpp", handoff=True, canonicalize=False
             )
-            safe_legacy_off, _ = _run_probe(
+            safe_no_legacy, _ = _run_probe(
                 probe,
                 staged_input,
                 tmpdir,
@@ -130,9 +127,8 @@ def main() -> int:
                 handoff=True,
                 canonicalize=True,
                 unsafe=False,
-                disable_legacy_tail_fallback=True,
             )
-            unsafe_legacy_off, unsafe_legacy_off_output = _run_probe(
+            unsafe_no_legacy, unsafe_no_legacy_output = _run_probe(
                 probe,
                 staged_input,
                 tmpdir,
@@ -140,25 +136,22 @@ def main() -> int:
                 handoff=True,
                 canonicalize=True,
                 unsafe=True,
-                disable_legacy_tail_fallback=True,
             )
 
-        if "[gencan-cpp-handoff-unsafe-downgraded]" not in unsafe_legacy_off_output:
-            raise RuntimeError(
-                f"{probe_name}: missing unsafe downgrade marker under legacy-tail-off configuration"
-            )
+        if "[gencan-cpp-fortran-tail]" in unsafe_no_legacy_output:
+            raise RuntimeError(f"{probe_name}: unexpected stale fortran-tail marker")
         for key in ("inform", "iter", "fcnt", "gcnt", "cgcnt"):
-            if int(safe_legacy_off[key]) != int(unsafe_legacy_off[key]):
+            if int(safe_no_legacy[key]) != int(unsafe_no_legacy[key]):
                 raise RuntimeError(
-                    f"{probe_name}: safe/unsafe legacy-off drift in {key}: "
-                    f"safe={safe_legacy_off[key]} unsafe={unsafe_legacy_off[key]}"
+                    f"{probe_name}: safe/unsafe drift in {key}: "
+                    f"safe={safe_no_legacy[key]} unsafe={unsafe_no_legacy[key]}"
                 )
         for key in ("f", "gpsupn", "xsum", "gnorm2"):
-            lhs = float(safe_legacy_off[key])
-            rhs = float(unsafe_legacy_off[key])
+            lhs = float(safe_no_legacy[key])
+            rhs = float(unsafe_no_legacy[key])
             if abs(lhs - rhs) > 1.0e-12:
                 raise RuntimeError(
-                    f"{probe_name}: safe/unsafe legacy-off drift in {key}: "
+                    f"{probe_name}: safe/unsafe drift in {key}: "
                     f"safe={lhs:.16e} unsafe={rhs:.16e}"
                 )
 

@@ -10,6 +10,9 @@
 namespace {
 
 thread_local int g_cg_active_call_id = 0;
+thread_local int g_spg_post_cpp_replay_depth = 0;
+thread_local int g_tn_post_cpp_replay_depth = 0;
+thread_local int g_init1_phase_active = 0;
 
 enum class GencanImplMode {
     kFortran = 0,
@@ -82,14 +85,6 @@ bool use_cpp_numeric_kernel() {
     return !(env[0] == '0' || env[0] == 'f' || env[0] == 'F' || env[0] == 'n' || env[0] == 'N');
 }
 
-bool use_easy_cpp_draft() {
-    const char* env = std::getenv("PACKMOL_GENCAN_EASY_CPP_DRAFT");
-    if (env == nullptr) {
-        return true;
-    }
-    return !(env[0] == '0' || env[0] == 'f' || env[0] == 'F' || env[0] == 'n' || env[0] == 'N');
-}
-
 bool tn_post_shadow_enabled() {
     const char* env = std::getenv("PACKMOL_GENCAN_TN_POST_SHADOW");
     if (env == nullptr) {
@@ -104,6 +99,200 @@ bool fallback_seed_state_enabled() {
         return false;
     }
     return env[0] == '1' || env[0] == 't' || env[0] == 'T' || env[0] == 'y' || env[0] == 'Y';
+}
+
+bool spg_post_handoff_enabled() {
+    const char* env = std::getenv("PACKMOL_GENCAN_SPG_POST_CPP_HANDOFF");
+    if (env == nullptr) {
+        return false;
+    }
+    return env[0] == '1' || env[0] == 't' || env[0] == 'T' || env[0] == 'y' || env[0] == 'Y';
+}
+
+bool tn_post_handoff_enabled() {
+    const char* env = std::getenv("PACKMOL_GENCAN_TN_POST_CPP_HANDOFF");
+    if (env == nullptr) {
+        return false;
+    }
+    return env[0] == '1' || env[0] == 't' || env[0] == 'T' || env[0] == 'y' || env[0] == 'Y';
+}
+
+bool tn_post_handoff_safe_enabled() {
+    const char* env = std::getenv("PACKMOL_GENCAN_TN_POST_CPP_HANDOFF_SAFE");
+    if (env == nullptr) {
+        return false;
+    }
+    return env[0] == '1' || env[0] == 't' || env[0] == 'T' || env[0] == 'y' || env[0] == 'Y';
+}
+
+bool tn_post_handoff_unsafe_enabled() {
+    const char* env = std::getenv("PACKMOL_GENCAN_TN_POST_CPP_HANDOFF_UNSAFE");
+    if (env == nullptr) {
+        return false;
+    }
+    return env[0] == '1' || env[0] == 't' || env[0] == 'T' || env[0] == 'y' || env[0] == 'Y';
+}
+
+bool tn_post_handoff_canonicalize_enabled() {
+    const char* env = std::getenv("PACKMOL_GENCAN_TN_POST_CPP_HANDOFF_CANONICALIZE");
+    if (env == nullptr) {
+        return true;
+    }
+    return !(env[0] == '0' || env[0] == 'f' || env[0] == 'F' || env[0] == 'n' || env[0] == 'N');
+}
+
+bool tn_post_handoff_cpp_replay_enabled() {
+    const char* env = std::getenv("PACKMOL_GENCAN_TN_POST_CPP_HANDOFF_CPP_REPLAY");
+    if (env == nullptr) {
+        return true;
+    }
+    return !(env[0] == '0' || env[0] == 'f' || env[0] == 'F' || env[0] == 'n' || env[0] == 'N');
+}
+
+bool block_cpp_tail_enabled() {
+    const char* env = std::getenv("PACKMOL_GENCAN_BLOCK_CPP_TAIL");
+    if (env == nullptr) {
+        // Legacy alias kept only for transition; blocked-tail is fully C++ now.
+        env = std::getenv("PACKMOL_GENCAN_BLOCK_FORTRAN_TAIL");
+    }
+    if (env == nullptr) {
+        return false;
+    }
+    return env[0] == '1' || env[0] == 't' || env[0] == 'T' || env[0] == 'y' || env[0] == 'Y';
+}
+
+bool cpp_tail_reduction_enabled() {
+    const char* env = std::getenv("PACKMOL_GENCAN_CPP_TAIL_REDUCTION");
+    if (env == nullptr) {
+        return true;
+    }
+    return !(env[0] == '0' || env[0] == 'f' || env[0] == 'F' || env[0] == 'n' || env[0] == 'N');
+}
+
+bool ab_compare_enabled() {
+    const char* env = std::getenv("PACKMOL_GENCAN_AB_COMPARE");
+    if (env == nullptr) {
+        return false;
+    }
+    return env[0] == '1' || env[0] == 't' || env[0] == 'T' || env[0] == 'y' || env[0] == 'Y';
+}
+
+bool block_cpp_tail_enabled();
+bool init1_phase_active_cpp();
+
+bool handoff_cpp_tail_enabled() {
+    const char* env = std::getenv("PACKMOL_GENCAN_HANDOFF_CPP_TAIL");
+    if (env == nullptr) {
+        return (active_impl_mode() == GencanImplMode::kCpp && !ab_compare_enabled()) ||
+               block_cpp_tail_enabled();
+    }
+    return env[0] == '1' || env[0] == 't' || env[0] == 'T' || env[0] == 'y' || env[0] == 'Y';
+}
+
+bool handoff_cpp_tail_allow_init1_enabled() {
+    const char* env = std::getenv("PACKMOL_GENCAN_HANDOFF_CPP_TAIL_ALLOW_INIT1");
+    if (env == nullptr) {
+        return false;
+    }
+    return env[0] == '1' || env[0] == 't' || env[0] == 'T' || env[0] == 'y' || env[0] == 'Y';
+}
+
+bool handoff_cpp_tail_allow_spg_post_enabled() {
+    const char* env = std::getenv("PACKMOL_GENCAN_HANDOFF_CPP_TAIL_ALLOW_SPG_POST");
+    if (env == nullptr) {
+        return active_impl_mode() == GencanImplMode::kCpp && !ab_compare_enabled();
+    }
+    return env[0] == '1' || env[0] == 't' || env[0] == 'T' || env[0] == 'y' || env[0] == 'Y';
+}
+
+bool handoff_cpp_tail_allow_tn_post_enabled() {
+    const char* env = std::getenv("PACKMOL_GENCAN_HANDOFF_CPP_TAIL_ALLOW_TN_POST");
+    if (env == nullptr) {
+        return active_impl_mode() == GencanImplMode::kCpp && !ab_compare_enabled();
+    }
+    return env[0] == '1' || env[0] == 't' || env[0] == 'T' || env[0] == 'y' || env[0] == 'Y';
+}
+
+bool handoff_cpp_tail_allow_tn_post_explicitly_enabled() {
+    const char* env = std::getenv("PACKMOL_GENCAN_HANDOFF_CPP_TAIL_ALLOW_TN_POST");
+    if (env == nullptr) {
+        return false;
+    }
+    return env[0] == '1' || env[0] == 't' || env[0] == 'T' || env[0] == 'y' || env[0] == 'Y';
+}
+
+bool is_tn_tail_reason_cpp(const std::string& reason) {
+    return reason == "tn_post_nonterminal" || reason == "tn_no_free_variables";
+}
+
+int spg_post_cpp_replay_max_depth() {
+    const char* env = std::getenv("PACKMOL_GENCAN_SPG_POST_CPP_REPLAY_MAX_DEPTH");
+    if (env == nullptr || env[0] == '\0') {
+        return 1;
+    }
+    char* end = nullptr;
+    long value = std::strtol(env, &end, 10);
+    if (end == env || value <= 0) {
+        return 1;
+    }
+    if (value > 4) {
+        return 4;
+    }
+    return static_cast<int>(value);
+}
+
+int tn_post_cpp_replay_max_depth() {
+    const char* env = std::getenv("PACKMOL_GENCAN_TN_POST_CPP_REPLAY_MAX_DEPTH");
+    if (env == nullptr || env[0] == '\0') {
+        return 1;
+    }
+    char* end = nullptr;
+    long value = std::strtol(env, &end, 10);
+    if (end == env || value <= 0) {
+        return 1;
+    }
+    if (value > 256) {
+        return 256;
+    }
+    return static_cast<int>(value);
+}
+
+bool tn_post_cpp_replay_tail_enabled() {
+    const char* env = std::getenv("PACKMOL_GENCAN_TN_POST_CPP_REPLAY_TAIL");
+    if (env == nullptr) {
+        return active_impl_mode() == GencanImplMode::kCpp && !ab_compare_enabled();
+    }
+    return env[0] == '1' || env[0] == 't' || env[0] == 'T' || env[0] == 'y' || env[0] == 'Y';
+}
+
+void apply_spg_post_cpp_replay_bookkeeping(
+    int* iter,
+    int* fcnt,
+    int* gcnt
+) {
+    // Replay starts from the post-line-search state and skips one outer
+    // accounting window present in the legacy continuation path.
+    *iter += 1;
+    *fcnt += 2;
+    *gcnt += 1;
+}
+
+int block_tail_continuation_steps() {
+    const char* env = std::getenv("PACKMOL_GENCAN_BLOCK_TAIL_STEPS");
+    if (env == nullptr || env[0] == '\0') {
+        // Default: keep continuing until a regular GENCAN stop condition
+        // is reached (maxit/maxfc/post-inform), matching main-loop intent.
+        return 0;
+    }
+    char* end = nullptr;
+    long value = std::strtol(env, &end, 10);
+    if (end == env || value <= 0) {
+        return 0;
+    }
+    if (value > 1024) {
+        return 1024;
+    }
+    return static_cast<int>(value);
 }
 
 int tn_post_retry_spg_steps() {
@@ -242,26 +431,47 @@ int evaluate_post_step_inform_cpp(
     const int iter_value,
     const int maxit,
     const int fcnt_value,
-    const int maxfc
+    const int maxfc,
+    double* progress_fprev,
+    double* progress_bestprog,
+    int* progress_itnfp
 ) {
     int post_inform = -1;
     if (precision_after) {
-        post_inform = line_inform;
-    } else if (line_inform == 6) {
-        post_inform = 6;
-    } else if (gpeucn2_after <= epsgpen * epsgpen) {
+        return line_inform;
+    }
+
+    if (gpeucn2_after <= epsgpen * epsgpen) {
         post_inform = 0;
     } else if (gpsupn_after <= epsgpsn) {
         post_inform = 1;
     } else {
-        const double currprog = f_before - f_after;
-        const double bestprog = std::max(currprog, 0.0);
+        double currprog = f_before - f_after;
+        if (progress_fprev != nullptr) {
+            currprog = (*progress_fprev) - f_after;
+        }
+        double bestprog = std::max(currprog, 0.0);
+        if (progress_bestprog != nullptr) {
+            *progress_bestprog = std::max(currprog, *progress_bestprog);
+            bestprog = *progress_bestprog;
+        }
         int itnfp = 0;
+        if (progress_itnfp != nullptr) {
+            itnfp = *progress_itnfp;
+        }
         if (currprog <= epsnfp * bestprog) {
             itnfp += 1;
             if (itnfp >= maxitnfp) {
                 post_inform = 2;
             }
+        } else {
+            itnfp = 0;
+        }
+        if (progress_itnfp != nullptr) {
+            *progress_itnfp = itnfp;
+        }
+        if (progress_fprev != nullptr) {
+            *progress_fprev = f_after;
         }
     }
 
@@ -283,7 +493,2084 @@ int evaluate_post_step_inform_cpp(
         post_inform = 8;
     }
 
+    if (post_inform < 0 && line_inform == 6) {
+        post_inform = 6;
+    }
+
     return post_inform;
+}
+
+void project_state_and_metrics_cpp(
+    const int n_val,
+    double* x,
+    const double* g,
+    const double* l,
+    const double* u,
+    const double epsrel,
+    const double epsabs,
+    int* ind,
+    int* nind_after,
+    double* gpsupn_after,
+    double* gpeucn2_after
+) {
+    *gpsupn_after = 0.0;
+    *gpeucn2_after = 0.0;
+    *nind_after = 0;
+    for (int i = 0; i < n_val; ++i) {
+        if (x[i] <= l[i] + std::max(epsrel * std::abs(l[i]), epsabs)) {
+            x[i] = l[i];
+        } else if (x[i] >= u[i] - std::max(epsrel * std::abs(u[i]), epsabs)) {
+            x[i] = u[i];
+        }
+        const double xpg = x[i] - g[i];
+        const double gpi = std::min(u[i], std::max(l[i], xpg)) - x[i];
+        *gpsupn_after = std::max(*gpsupn_after, std::abs(gpi));
+        *gpeucn2_after += gpi * gpi;
+        if (x[i] > l[i] && x[i] < u[i]) {
+            ind[*nind_after] = i + 1;
+            *nind_after += 1;
+        }
+    }
+}
+
+int finalize_blocked_tail_inform_cpp(
+    const int post_inform,
+    const bool precision_after,
+    const double gpeucn2_after,
+    const double epsgpen,
+    const double gpsupn_after,
+    const double epsgpsn,
+    const int iter_value,
+    const int maxit,
+    const int fcnt_value,
+    const int maxfc
+) {
+    if (post_inform >= 0) {
+        return post_inform;
+    }
+    if (precision_after || gpeucn2_after <= epsgpen * epsgpen) {
+        return 0;
+    }
+    if (gpsupn_after <= epsgpsn) {
+        return 1;
+    }
+    if (iter_value >= maxit) {
+        return 7;
+    }
+    if (fcnt_value >= maxfc) {
+        return 8;
+    }
+    return 6;
+}
+
+double norm2_kernel(const int n, const double* x);
+
+void eval_gradient_full_cpp(
+    const int* n,
+    double* x,
+    const int* m,
+    const double* lambda,
+    const double* rho,
+    const int* gtype,
+    double* g,
+    const double* sterel,
+    const double* steabs,
+    int* inform
+);
+
+bool packmolprecision_cpp(
+    const int* n,
+    double* x,
+    const int* m,
+    const double* lambda,
+    const double* rho,
+    int* eval_flag
+);
+
+void spgls_cpp(
+    const int* n,
+    double* x,
+    const int* m,
+    const double* lambda,
+    const double* rho,
+    double* f,
+    const double* g,
+    const double* l,
+    const double* u,
+    const double* lamspg,
+    const double* nint,
+    const int* mininterp,
+    const double* fmin,
+    const int* maxfc,
+    int* fcnt,
+    int* inform,
+    double* xtrial,
+    double* d,
+    const double* gamma,
+    const double* sigma1,
+    const double* sigma2,
+    const double* epsrel,
+    const double* epsabs
+);
+
+bool tnls_cpp_subset(
+    const int* nind,
+    const int* ind,
+    const int* n,
+    double* x,
+    const int* m,
+    const double* lambda,
+    const double* rho,
+    const double* l,
+    const double* u,
+    double* f,
+    double* g,
+    const double* d,
+    const double* amax,
+    const int* rbdtype,
+    const int* rbdind,
+    const double* nint,
+    const double* next,
+    const int* mininterp,
+    const int* maxextrap,
+    const double* fmin,
+    const int* maxfc,
+    const int* gtype,
+    int* fcnt,
+    int* gcnt,
+    int* intcnt,
+    int* exgcnt,
+    int* exbcnt,
+    int* inform,
+    double* xplus,
+    double* xtmp,
+    double* xbext,
+    const double* gamma,
+    const double* beta,
+    const double* sigma1,
+    const double* sigma2,
+    const double* sterel,
+    const double* steabs,
+    const double* epsrel,
+    const double* epsabs
+);
+
+void cg_cpp_full(
+    const int* nind,
+    const int* ind,
+    const int* n,
+    double* x,
+    const int* m,
+    const double* lambda,
+    const double* rho,
+    double* g,
+    const double* delta,
+    const double* l,
+    const double* u,
+    const double* eps,
+    const double* epsnqmp,
+    const int* maxitnqmp,
+    const int* maxit,
+    const bool* nearlyq,
+    const int* gtype,
+    const int* htvtype,
+    const int* trtype,
+    const int* iprint,
+    const double* theta,
+    const double* sterel,
+    const double* steabs,
+    const double* epsrel,
+    const double* epsabs,
+    const double* infabs,
+    double* s,
+    double* w,
+    double* y,
+    double* r,
+    double* d,
+    double* sprev,
+    int* iter,
+    int* rbdtype,
+    int* rbdind,
+    int* inform
+);
+
+extern "C" void packmol_gencan_cg_bridge(
+    const int* nind,
+    const int* ind,
+    const int* n,
+    double* x,
+    const int* m,
+    const double* lambda,
+    const double* rho,
+    double* g,
+    const double* delta,
+    const double* l,
+    const double* u,
+    const double* eps,
+    const double* epsnqmp,
+    const int* maxitnqmp,
+    const int* maxit,
+    const bool* nearlyq,
+    const int* gtype,
+    const int* htvtype,
+    const int* trtype,
+    const int* iprint,
+    const int* ncomp,
+    double* s,
+    int* iter,
+    int* rbdtype,
+    int* rbdind,
+    int* inform,
+    double* w,
+    double* y,
+    double* r,
+    double* d,
+    double* sprev,
+    const double* theta,
+    const double* sterel,
+    const double* steabs,
+    const double* epsrel,
+    const double* epsabs,
+    const double* infrel,
+    const double* infabs
+);
+
+struct TnPostContinuationInputs {
+    const int* n;
+    double* x;
+    const int* m;
+    const double* lambda;
+    const double* rho;
+    const int* gtype;
+    double* g;
+    const double* l;
+    const double* u;
+    const double* epsrel;
+    const double* epsabs;
+    int* ind;
+    double* gpeucn2;
+    double* gpsupn;
+    const int* maxitngp;
+    double* lastgpns;
+    int* iter;
+    const int* maxfc;
+    int* fcnt;
+    int* gcnt;
+    int* cgcnt;
+    int* spgiter;
+    int* spgfcnt;
+    int* tniter;
+    int* tnfcnt;
+    int* tnstpcnt;
+    int* tnintcnt;
+    int* tnexgcnt;
+    int* tnexbcnt;
+    int* tnintfe;
+    int* tnexgfe;
+    int* tnexbfe;
+    double* s_vec;
+    double* y_vec;
+    const double* udelta0;
+    const int* ucgmaxit;
+    const int* cgscre;
+    const double* cggpnf;
+    const double* cgepsi;
+    const double* cgepsf;
+    const double* epsnqmp;
+    const int* maxitnqmp;
+    const bool* nearlyq;
+    const int* htvtype;
+    const int* trtype;
+    const int* iprint;
+    const int* ncomp;
+    const double* eta;
+    const double* delmin;
+    const double* lspgma;
+    const double* lspgmi;
+    const double* nint;
+    const double* next;
+    const int* mininterp;
+    const int* maxextrap;
+    const double* fmin;
+    double* f;
+    const double* theta;
+    const double* gamma;
+    const double* beta;
+    const double* sigma1;
+    const double* sigma2;
+    const double* sterel;
+    const double* steabs;
+    const double* epsgpen;
+    const double* epsgpsn;
+    const int* maxitnfp;
+    const double* epsnfp;
+    const double* infrel;
+    const double* infabs;
+    const int* maxit;
+    const bool cg_schedule_seed_valid;
+    const double cg_schedule_acgeps;
+    const double cg_schedule_bcgeps;
+    const double cg_schedule_gpeucn20;
+    const double cg_schedule_gpsupn0;
+    int* inform;
+};
+
+void continue_tn_post_blocked_tail_cpp(
+    const int n_val,
+    const TnPostContinuationInputs& inputs,
+    bool* precision_after,
+    double* gpsupn_after,
+    double* gpeucn2_after,
+    int* nind_after,
+    int* post_inform,
+    int* continuation_budget_used,
+    int* continuation_steps_done,
+    double* progress_fprev,
+    double* progress_bestprog,
+    int* progress_itnfp
+) {
+    const int continuation_budget = block_tail_continuation_steps();
+    const bool unlimited_continuation = continuation_budget <= 0;
+    *continuation_budget_used = continuation_budget;
+    std::vector<double> xtrial_work(n_val, 0.0);
+    std::vector<double> d_work(n_val, 0.0);
+    std::vector<double> x_prev(n_val, 0.0);
+    std::vector<double> g_prev(n_val, 0.0);
+    double sts = 0.0;
+    double sty = 0.0;
+    if (inputs.s_vec != nullptr && inputs.y_vec != nullptr) {
+        for (int i = 0; i < n_val; ++i) {
+            sts += inputs.s_vec[i] * inputs.s_vec[i];
+            sty += inputs.s_vec[i] * inputs.y_vec[i];
+        }
+    }
+    while (unlimited_continuation || *continuation_steps_done < continuation_budget) {
+        *continuation_steps_done += 1;
+        *inputs.iter += 1;
+        const double f_before_retry = *inputs.f;
+        for (int i = 0; i < n_val; ++i) {
+            x_prev[i] = inputs.x[i];
+            g_prev[i] = inputs.g[i];
+        }
+        int line_inform = 0;
+        double gieucn2_after = 0.0;
+        for (int i = 0; i < n_val; ++i) {
+            const double xpg = inputs.x[i] - inputs.g[i];
+            const double gpi = std::min(inputs.u[i], std::max(inputs.l[i], xpg)) - inputs.x[i];
+            if (inputs.x[i] > inputs.l[i] && inputs.x[i] < inputs.u[i]) {
+                gieucn2_after += gpi * gpi;
+            }
+        }
+        const double ometa2 = (1.0 - *inputs.eta) * (1.0 - *inputs.eta);
+        const bool use_spg_step =
+            (*gpeucn2_after > 0.0 && gieucn2_after <= ometa2 * (*gpeucn2_after)) ||
+            *nind_after <= 0;
+
+        if (!use_spg_step) {
+            std::vector<double> x_work(inputs.x, inputs.x + n_val);
+            std::vector<double> g_work(inputs.g, inputs.g + n_val);
+            std::vector<double> l_work(inputs.l, inputs.l + n_val);
+            std::vector<double> u_work(inputs.u, inputs.u + n_val);
+            const int nind_work = *nind_after;
+
+            shrink_inplace(nind_work, inputs.ind, x_work.data());
+            shrink_inplace(nind_work, inputs.ind, g_work.data());
+            shrink_inplace(nind_work, inputs.ind, l_work.data());
+            shrink_inplace(nind_work, inputs.ind, u_work.data());
+
+            const double xnorm_full = std::sqrt(norm2_kernel(n_val, inputs.x));
+            double delta = 0.0;
+            if (*inputs.iter <= 1) {
+                if (*inputs.udelta0 <= 0.0) {
+                    delta = std::max(*inputs.delmin, 0.1 * std::max(1.0, xnorm_full));
+                } else {
+                    delta = *inputs.udelta0;
+                }
+            } else {
+                delta = std::max(*inputs.delmin, 10.0 * std::sqrt(std::max(sts, 0.0)));
+            }
+
+            double acgeps = 0.0;
+            double bcgeps = 0.0;
+            if (inputs.cg_schedule_seed_valid) {
+                acgeps = inputs.cg_schedule_acgeps;
+                bcgeps = inputs.cg_schedule_bcgeps;
+            } else {
+                gp_ieee_signal1_cpp(
+                    *gpsupn_after,
+                    &acgeps,
+                    &bcgeps,
+                    *inputs.cgepsf,
+                    *inputs.cgepsi,
+                    *inputs.cggpnf
+                );
+            }
+
+            const double epsgpen2 = (*inputs.epsgpen) * (*inputs.epsgpen);
+            const double gpeucn20 =
+                inputs.cg_schedule_seed_valid ? inputs.cg_schedule_gpeucn20 : *gpeucn2_after;
+            const double gpsupn0 =
+                inputs.cg_schedule_seed_valid ? inputs.cg_schedule_gpsupn0 : *gpsupn_after;
+            double kappa = 0.0;
+            double cgeps = *inputs.cgepsf;
+            int cgmaxit = 0;
+            gp_ieee_signal2_cpp(
+                &cgmaxit,
+                nind_work,
+                *inputs.nearlyq,
+                *inputs.ucgmaxit,
+                *inputs.cgscre,
+                &kappa,
+                *gpeucn2_after,
+                gpeucn20,
+                epsgpen2,
+                *inputs.epsgpsn,
+                &cgeps,
+                acgeps,
+                bcgeps,
+                *inputs.cgepsf,
+                *inputs.cgepsi,
+                *gpsupn_after,
+                gpsupn0
+            );
+
+            std::vector<double> cg_s(n_val, 0.0);
+            std::vector<double> cg_w(n_val, 0.0);
+            std::vector<double> cg_y(n_val, 0.0);
+            std::vector<double> cg_r(n_val, 0.0);
+            std::vector<double> cg_d(n_val, 0.0);
+            std::vector<double> cg_sprev(n_val, 0.0);
+            int cg_iter = 0;
+            int rbdtype = 0;
+            int rbdind = 0;
+            int cg_inform = 0;
+            packmol_gencan_cg_bridge(
+                &nind_work, inputs.ind, inputs.n, x_work.data(), inputs.m, inputs.lambda,
+                inputs.rho, g_work.data(), &delta, l_work.data(), u_work.data(), &cgeps,
+                inputs.epsnqmp, inputs.maxitnqmp, &cgmaxit, inputs.nearlyq, inputs.gtype,
+                inputs.htvtype, inputs.trtype, inputs.iprint, inputs.ncomp, cg_s.data(),
+                &cg_iter, &rbdtype, &rbdind, &cg_inform, cg_w.data(), cg_y.data(),
+                cg_r.data(), cg_d.data(), cg_sprev.data(), inputs.theta, inputs.sterel,
+                inputs.steabs, inputs.epsrel, inputs.epsabs, inputs.infrel, inputs.infabs
+            );
+            *inputs.cgcnt += cg_iter;
+            if (cg_inform < 0) {
+                *inputs.inform = cg_inform;
+                return;
+            }
+
+            double amax = *inputs.infabs;
+            if (cg_inform == 2) {
+                amax = 1.0;
+            } else {
+                for (int i = 0; i < nind_work; ++i) {
+                    if (cg_s[i] > 0.0) {
+                        const double amaxx = (u_work[i] - x_work[i]) / cg_s[i];
+                        if (amaxx < amax) {
+                            amax = amaxx;
+                            rbdind = i + 1;
+                            rbdtype = 2;
+                        }
+                    } else if (cg_s[i] < 0.0) {
+                        const double amaxx = (l_work[i] - x_work[i]) / cg_s[i];
+                        if (amaxx < amax) {
+                            amax = amaxx;
+                            rbdind = i + 1;
+                            rbdtype = 1;
+                        }
+                    }
+                }
+            }
+
+            int tnls_inform = 0;
+            const int tnint_prev = *inputs.tnintcnt;
+            const int tnexg_prev = *inputs.tnexgcnt;
+            const int tnexb_prev = *inputs.tnexbcnt;
+            const int fcnt_prev_tn = *inputs.fcnt;
+            double f_work = *inputs.f;
+            std::vector<double> xplus(n_val, 0.0);
+            std::vector<double> xtmp(n_val, 0.0);
+            std::vector<double> xbext(n_val, 0.0);
+            (void)tnls_cpp_subset(
+                &nind_work, inputs.ind, inputs.n, x_work.data(), inputs.m, inputs.lambda, inputs.rho,
+                l_work.data(), u_work.data(), &f_work, g_work.data(), cg_s.data(), &amax, &rbdtype,
+                &rbdind, inputs.nint, inputs.next, inputs.mininterp, inputs.maxextrap, inputs.fmin,
+                inputs.maxfc, inputs.gtype, inputs.fcnt, inputs.gcnt, inputs.tnintcnt, inputs.tnexgcnt,
+                inputs.tnexbcnt, &tnls_inform, xplus.data(), xtmp.data(), xbext.data(), inputs.gamma,
+                inputs.beta, inputs.sigma1, inputs.sigma2, inputs.sterel, inputs.steabs, inputs.epsrel,
+                inputs.epsabs
+            );
+            if (tnls_inform < 0) {
+                *inputs.inform = tnls_inform;
+                return;
+            }
+
+            *inputs.tniter += 1;
+            if (*inputs.tnintcnt > tnint_prev) {
+                *inputs.tnintfe += (*inputs.fcnt - fcnt_prev_tn);
+            } else if (*inputs.tnexgcnt > tnexg_prev) {
+                *inputs.tnexgfe += (*inputs.fcnt - fcnt_prev_tn);
+            } else if (*inputs.tnexbcnt > tnexb_prev) {
+                *inputs.tnexbfe += (*inputs.fcnt - fcnt_prev_tn);
+            } else {
+                *inputs.tnstpcnt += 1;
+            }
+            *inputs.tnfcnt += (*inputs.fcnt - fcnt_prev_tn);
+
+            expand_inplace(nind_work, inputs.ind, x_work.data());
+            expand_inplace(nind_work, inputs.ind, g_work.data());
+            expand_inplace(nind_work, inputs.ind, l_work.data());
+            expand_inplace(nind_work, inputs.ind, u_work.data());
+
+            for (int i = 0; i < n_val; ++i) {
+                if (x_work[i] <= l_work[i] + std::max((*inputs.epsrel) * std::abs(l_work[i]), *inputs.epsabs)) {
+                    x_work[i] = l_work[i];
+                } else if (x_work[i] >= u_work[i] - std::max((*inputs.epsrel) * std::abs(u_work[i]), *inputs.epsabs)) {
+                    x_work[i] = u_work[i];
+                }
+            }
+
+                line_inform = tnls_inform;
+                if (tnls_inform == 6) {
+                    *inputs.spgiter += 1;
+                    double lamspg =
+                        std::max(1.0, xnorm_full) / std::sqrt(std::max(*gpeucn2_after, 1.0e-30));
+                    lamspg = std::min(*inputs.lspgma, std::max(*inputs.lspgmi, lamspg));
+                const int fcnt_prev_spg = *inputs.fcnt;
+                int spg_line_inform = 0;
+                spgls_cpp(
+                    inputs.n, x_work.data(), inputs.m, inputs.lambda, inputs.rho, &f_work,
+                    g_work.data(), l_work.data(), u_work.data(), &lamspg, inputs.nint,
+                    inputs.mininterp, inputs.fmin, inputs.maxfc, inputs.fcnt, &spg_line_inform,
+                    xtrial_work.data(), d_work.data(), inputs.gamma, inputs.sigma1, inputs.sigma2,
+                    inputs.epsrel, inputs.epsabs
+                );
+                *inputs.spgfcnt += (*inputs.fcnt - fcnt_prev_spg);
+                if (spg_line_inform < 0) {
+                    *inputs.inform = spg_line_inform;
+                    return;
+                }
+                int grad_inform = 0;
+                eval_gradient_full_cpp(
+                    inputs.n, x_work.data(), inputs.m, inputs.lambda, inputs.rho, inputs.gtype,
+                    g_work.data(), inputs.sterel, inputs.steabs, &grad_inform
+                );
+                *inputs.gcnt += 1;
+                if (grad_inform < 0) {
+                    *inputs.inform = grad_inform;
+                    return;
+                }
+                line_inform = spg_line_inform;
+            }
+
+            for (int i = 0; i < n_val; ++i) {
+                inputs.x[i] = x_work[i];
+                inputs.g[i] = g_work[i];
+            }
+            *inputs.f = f_work;
+        } else {
+            double lamspg = 0.0;
+            if (*inputs.iter <= 1 || sty <= 0.0) {
+                const double xnorm_for_spg = std::sqrt(norm2_kernel(n_val, inputs.x));
+                lamspg = std::max(1.0, xnorm_for_spg) / std::sqrt(std::max(*gpeucn2_after, 1.0e-30));
+            } else {
+                lamspg = sts / sty;
+            }
+            lamspg = std::min(*inputs.lspgma, std::max(*inputs.lspgmi, lamspg));
+            const int fcnt_before_tail = *inputs.fcnt;
+            spgls_cpp(
+                inputs.n, inputs.x, inputs.m, inputs.lambda, inputs.rho, inputs.f, inputs.g,
+                inputs.l, inputs.u, &lamspg, inputs.nint, inputs.mininterp, inputs.fmin,
+                inputs.maxfc, inputs.fcnt, &line_inform, xtrial_work.data(), d_work.data(),
+                inputs.gamma, inputs.sigma1, inputs.sigma2, inputs.epsrel, inputs.epsabs
+            );
+            *inputs.spgfcnt += (*inputs.fcnt - fcnt_before_tail);
+            *inputs.spgiter += 1;
+
+            if (line_inform < 0) {
+                *inputs.inform = line_inform;
+                return;
+            }
+
+            int grad_inform = 0;
+            eval_gradient_full_cpp(
+                inputs.n, inputs.x, inputs.m, inputs.lambda, inputs.rho, inputs.gtype, inputs.g,
+                inputs.sterel, inputs.steabs, &grad_inform
+            );
+            *inputs.gcnt += 1;
+            if (grad_inform < 0) {
+                *inputs.inform = grad_inform;
+                return;
+            }
+        }
+
+        project_state_and_metrics_cpp(
+            n_val, inputs.x, inputs.g, inputs.l, inputs.u, *inputs.epsrel, *inputs.epsabs,
+            inputs.ind, nind_after, gpsupn_after, gpeucn2_after
+        );
+        sts = 0.0;
+        sty = 0.0;
+        if (inputs.s_vec != nullptr && inputs.y_vec != nullptr) {
+            for (int i = 0; i < n_val; ++i) {
+                inputs.s_vec[i] = inputs.x[i] - x_prev[i];
+                inputs.y_vec[i] = inputs.g[i] - g_prev[i];
+                sts += inputs.s_vec[i] * inputs.s_vec[i];
+                sty += inputs.s_vec[i] * inputs.y_vec[i];
+            }
+        }
+        *inputs.gpeucn2 = *gpeucn2_after;
+        *inputs.gpsupn = *gpsupn_after;
+        if (*inputs.maxitngp > 0) {
+            inputs.lastgpns[*inputs.iter % (*inputs.maxitngp)] = *gpeucn2_after;
+        }
+
+        int precision_after_retry_flag = 0;
+        *precision_after = packmolprecision_cpp(
+            inputs.n, inputs.x, inputs.m, inputs.lambda, inputs.rho, &precision_after_retry_flag
+        );
+        if (precision_after_retry_flag < 0) {
+            *inputs.inform = precision_after_retry_flag;
+            return;
+        }
+        *post_inform = evaluate_post_step_inform_cpp(
+            *precision_after,
+            line_inform,
+            *gpeucn2_after,
+            *inputs.epsgpen,
+            *gpsupn_after,
+            *inputs.epsgpsn,
+            f_before_retry,
+            *inputs.f,
+            *inputs.epsnfp,
+            *inputs.maxitnfp,
+            *inputs.infabs,
+            inputs.lastgpns,
+            *inputs.maxitngp,
+            *inputs.fmin,
+            *inputs.iter,
+            *inputs.maxit,
+            *inputs.fcnt,
+            *inputs.maxfc,
+            progress_fprev,
+            progress_bestprog,
+            progress_itnfp
+        );
+        if (*post_inform >= 0) {
+            break;
+        }
+        if (*inputs.fcnt >= *inputs.maxfc || *inputs.iter >= *inputs.maxit) {
+            break;
+        }
+    }
+}
+
+struct ContinuationProgressState {
+    double fprev;
+    double bestprog;
+    int itnfp;
+};
+
+ContinuationProgressState make_continuation_progress_state_cpp(
+    const double f_value,
+    const double infabs_value,
+    const double* progress_fprev_seed,
+    const double* progress_bestprog_seed,
+    const int* progress_itnfp_seed
+) {
+    ContinuationProgressState state{
+        f_value,
+        std::max(infabs_value - f_value, 0.0),
+        0
+    };
+    if (progress_fprev_seed != nullptr) {
+        state.fprev = *progress_fprev_seed;
+    }
+    if (progress_bestprog_seed != nullptr) {
+        state.bestprog = *progress_bestprog_seed;
+    }
+    if (progress_itnfp_seed != nullptr) {
+        state.itnfp = *progress_itnfp_seed;
+    }
+    return state;
+}
+
+void emit_blocked_tail_debug_cpp(
+    const char* fallback_reason,
+    const int post_inform,
+    const bool precision_after,
+    const int nind_after,
+    const int iter_value,
+    const int fcnt_value,
+    const double gpsupn_after,
+    const double gpeucn2_after,
+    const int continuation_budget_used,
+    const int continuation_steps_done,
+    const int maxfc_value
+) {
+    if (!gencan_debug_enabled()) {
+        return;
+    }
+    std::fprintf(
+        stderr,
+        "[gencan-cpp-tail-blocked] reason=%s mode=%d post_inform=%d precision=%d nind=%d iter=%d fcnt=%d gpsupn=%.16e gpeucn2=%.16e\n",
+        fallback_reason,
+        static_cast<int>(active_impl_mode()),
+        post_inform,
+        precision_after ? 1 : 0,
+        nind_after,
+        iter_value,
+        fcnt_value,
+        gpsupn_after,
+        gpeucn2_after
+    );
+    std::fprintf(
+        stderr,
+        "[gencan-cpp-tail-blocked-detail] reason=%s mode=%d budget=%d steps=%d maxfc=%d fcnt=%d\n",
+        fallback_reason,
+        static_cast<int>(active_impl_mode()),
+        continuation_budget_used,
+        continuation_steps_done,
+        maxfc_value,
+        fcnt_value
+    );
+}
+
+void execute_tn_post_blocked_tail_cpp(
+    const char* fallback_reason,
+    const int n_val,
+    const TnPostContinuationInputs& inputs,
+    const double* progress_fprev_seed,
+    const double* progress_bestprog_seed,
+    const int* progress_itnfp_seed
+) {
+    double gpsupn_after = 0.0;
+    double gpeucn2_after = 0.0;
+    int nind_after = 0;
+    project_state_and_metrics_cpp(
+        n_val, inputs.x, inputs.g, inputs.l, inputs.u, *inputs.epsrel, *inputs.epsabs,
+        inputs.ind, &nind_after, &gpsupn_after, &gpeucn2_after
+    );
+    *inputs.gpeucn2 = gpeucn2_after;
+    *inputs.gpsupn = gpsupn_after;
+    if (*inputs.maxitngp > 0) {
+        inputs.lastgpns[*inputs.iter % (*inputs.maxitngp)] = gpeucn2_after;
+    }
+
+    int post_inform = -1;
+    bool precision_after = false;
+    int continuation_budget_used = 0;
+    int continuation_steps_done = 0;
+    if (*inputs.fcnt < *inputs.maxfc) {
+        if (*inputs.iter <= 0) {
+            *inputs.iter = 1;
+        }
+        ContinuationProgressState progress_state = make_continuation_progress_state_cpp(
+            *inputs.f, *inputs.infabs, progress_fprev_seed, progress_bestprog_seed,
+            progress_itnfp_seed
+        );
+        continue_tn_post_blocked_tail_cpp(
+            n_val,
+            inputs,
+            &precision_after,
+            &gpsupn_after,
+            &gpeucn2_after,
+            &nind_after,
+            &post_inform,
+            &continuation_budget_used,
+            &continuation_steps_done,
+            &progress_state.fprev,
+            &progress_state.bestprog,
+            &progress_state.itnfp
+        );
+    } else {
+        int precision_after_flag = 0;
+        precision_after = packmolprecision_cpp(
+            inputs.n, inputs.x, inputs.m, inputs.lambda, inputs.rho, &precision_after_flag
+        );
+        if (precision_after_flag < 0) {
+            *inputs.inform = precision_after_flag;
+            return;
+        }
+    }
+
+    emit_blocked_tail_debug_cpp(
+        fallback_reason,
+        post_inform,
+        precision_after,
+        nind_after,
+        *inputs.iter,
+        *inputs.fcnt,
+        gpsupn_after,
+        gpeucn2_after,
+        continuation_budget_used,
+        continuation_steps_done,
+        *inputs.maxfc
+    );
+    *inputs.inform = finalize_blocked_tail_inform_cpp(
+        post_inform,
+        precision_after,
+        gpeucn2_after,
+        *inputs.epsgpen,
+        gpsupn_after,
+        *inputs.epsgpsn,
+        *inputs.iter,
+        *inputs.maxit,
+        *inputs.fcnt,
+        *inputs.maxfc
+    );
+}
+
+void execute_blocked_tail_cpp(
+    const char* fallback_reason,
+    const int n_val,
+    const int* n,
+    double* x,
+    const int* m,
+    const double* lambda,
+    const double* rho,
+    const int* gtype,
+    double* g,
+    const double* l,
+    const double* u,
+    const double* epsrel,
+    const double* epsabs,
+    int* ind,
+    double* gpeucn2,
+    double* gpsupn,
+    const int* maxitngp,
+    double* lastgpns,
+    int* iter,
+    const int* maxfc,
+    int* fcnt,
+    int* gcnt,
+    int* cgcnt,
+    int* spgiter,
+    int* spgfcnt,
+    int* tniter,
+    int* tnfcnt,
+    int* tnstpcnt,
+    int* tnintcnt,
+    int* tnexgcnt,
+    int* tnexbcnt,
+    int* tnintfe,
+    int* tnexgfe,
+    int* tnexbfe,
+    double* s_vec,
+    double* y_vec,
+    double* w_vec,
+    const double* udelta0,
+    const int* ucgmaxit,
+    const int* cgscre,
+    const double* cggpnf,
+    const double* cgepsi,
+    const double* cgepsf,
+    const double* epsnqmp,
+    const int* maxitnqmp,
+    const bool* nearlyq,
+    const int* htvtype,
+    const int* trtype,
+    const int* iprint,
+    const int* ncomp,
+    const double* eta,
+    const double* delmin,
+    const double* lspgma,
+    const double* lspgmi,
+    const double* nint,
+    const double* next,
+    const int* mininterp,
+    const int* maxextrap,
+    const double* fmin,
+    double* f,
+    const double* theta,
+    const double* gamma,
+    const double* beta,
+    const double* sigma1,
+    const double* sigma2,
+    const double* sterel,
+    const double* steabs,
+    const double* epsgpen,
+    const double* epsgpsn,
+    const int* maxitnfp,
+    const double* epsnfp,
+    const double* infabs,
+    const int* maxit,
+    int* inform,
+    const double* progress_fprev_seed,
+    const double* progress_bestprog_seed,
+    const int* progress_itnfp_seed
+) {
+    const std::string blocked_reason(fallback_reason);
+    (void)w_vec;
+    (void)ncomp;
+    int grad_inform = 0;
+    eval_gradient_full_cpp(n, x, m, lambda, rho, gtype, g, sterel, steabs, &grad_inform);
+    *gcnt += 1;
+    if (grad_inform < 0) {
+        *inform = grad_inform;
+        return;
+    }
+
+    double gpsupn_after = 0.0;
+    double gpeucn2_after = 0.0;
+    int nind_after = 0;
+    project_state_and_metrics_cpp(
+        n_val, x, g, l, u, *epsrel, *epsabs, ind, &nind_after, &gpsupn_after, &gpeucn2_after
+    );
+    *gpeucn2 = gpeucn2_after;
+    *gpsupn = gpsupn_after;
+    if (*maxitngp > 0) {
+        lastgpns[*iter % (*maxitngp)] = gpeucn2_after;
+    }
+
+    const bool can_continue_from_post =
+        blocked_reason == "spg_post_nonterminal" ||
+        blocked_reason == "tn_no_free_variables";
+    int precision_after_flag = 0;
+    bool precision_after = packmolprecision_cpp(
+        n, x, m, lambda, rho, &precision_after_flag
+    );
+    if (precision_after_flag < 0) {
+        *inform = precision_after_flag;
+        return;
+    }
+    int post_inform = -1;
+    int continuation_budget_used = 0;
+    int continuation_steps_done = 0;
+    if (can_continue_from_post && *fcnt < *maxfc) {
+        if (*iter <= 0) {
+            *iter = 1;
+        }
+        ContinuationProgressState progress_state = make_continuation_progress_state_cpp(
+            *f, *infabs, progress_fprev_seed, progress_bestprog_seed, progress_itnfp_seed
+        );
+        post_inform = evaluate_post_step_inform_cpp(
+            precision_after,
+            0,
+            gpeucn2_after,
+            *epsgpen,
+            gpsupn_after,
+            *epsgpsn,
+            *f,
+            *f,
+            *epsnfp,
+            *maxitnfp,
+            *infabs,
+            lastgpns,
+            *maxitngp,
+            *fmin,
+            *iter,
+            *maxit,
+            *fcnt,
+            *maxfc,
+            &progress_state.fprev,
+            &progress_state.bestprog,
+            &progress_state.itnfp
+        );
+        if (post_inform >= 0) {
+            continuation_budget_used = 0;
+            continuation_steps_done = 0;
+        } else {
+            const int continuation_budget = block_tail_continuation_steps();
+            const bool unlimited_continuation = continuation_budget <= 0;
+            continuation_budget_used = continuation_budget;
+            std::vector<double> xtrial_work(n_val, 0.0);
+            std::vector<double> d_work(n_val, 0.0);
+            std::vector<double> x_prev(n_val, 0.0);
+            std::vector<double> g_prev(n_val, 0.0);
+            double sts = 0.0;
+            double sty = 0.0;
+            if (s_vec != nullptr && y_vec != nullptr) {
+                for (int i = 0; i < n_val; ++i) {
+                    sts += s_vec[i] * s_vec[i];
+                    sty += y_vec[i] * y_vec[i];
+                }
+            }
+            while (unlimited_continuation || continuation_steps_done < continuation_budget) {
+                continuation_steps_done += 1;
+                *iter += 1;
+                const double f_before_retry = *f;
+                for (int i = 0; i < n_val; ++i) {
+                    x_prev[i] = x[i];
+                    g_prev[i] = g[i];
+                }
+                int line_inform = 0;
+                double gieucn2_after = 0.0;
+                for (int i = 0; i < n_val; ++i) {
+                    const double xpg = x[i] - g[i];
+                    const double gpi = std::min(u[i], std::max(l[i], xpg)) - x[i];
+                    if (x[i] > l[i] && x[i] < u[i]) {
+                        gieucn2_after += gpi * gpi;
+                    }
+                }
+                const double ometa2 = (1.0 - *eta) * (1.0 - *eta);
+                const bool use_spg_step =
+                    (gpeucn2_after > 0.0 && gieucn2_after <= ometa2 * gpeucn2_after) ||
+                    nind_after <= 0;
+
+            if (!use_spg_step) {
+                std::vector<double> x_work(x, x + n_val);
+                std::vector<double> g_work(g, g + n_val);
+                std::vector<double> l_work(l, l + n_val);
+                std::vector<double> u_work(u, u + n_val);
+                const int nind_work = nind_after;
+
+                shrink_inplace(nind_work, ind, x_work.data());
+                shrink_inplace(nind_work, ind, g_work.data());
+                shrink_inplace(nind_work, ind, l_work.data());
+                shrink_inplace(nind_work, ind, u_work.data());
+
+                const double xnorm_full = std::sqrt(norm2_kernel(n_val, x));
+                double delta = 0.0;
+                if (*udelta0 <= 0.0) {
+                    delta = std::max(*delmin, 0.1 * std::max(1.0, xnorm_full));
+                } else {
+                    delta = *udelta0;
+                }
+
+                double acgeps = 0.0;
+                double bcgeps = 0.0;
+                gp_ieee_signal1_cpp(gpsupn_after, &acgeps, &bcgeps, *cgepsf, *cgepsi, *cggpnf);
+
+                const double epsgpen2 = (*epsgpen) * (*epsgpen);
+                const double gpeucn20 = gpeucn2_after;
+                const double gpsupn0 = gpsupn_after;
+                double kappa = 0.0;
+                double cgeps = *cgepsf;
+                int cgmaxit = 0;
+                gp_ieee_signal2_cpp(
+                    &cgmaxit, nind_work, *nearlyq, *ucgmaxit, *cgscre, &kappa, gpeucn2_after,
+                    gpeucn20, epsgpen2, *epsgpsn, &cgeps, acgeps, bcgeps, *cgepsf, *cgepsi,
+                    gpsupn_after, gpsupn0
+                );
+
+                std::vector<double> cg_s(n_val, 0.0);
+                std::vector<double> cg_w(n_val, 0.0);
+                std::vector<double> cg_y(n_val, 0.0);
+                std::vector<double> cg_r(n_val, 0.0);
+                std::vector<double> cg_d(n_val, 0.0);
+                std::vector<double> cg_sprev(n_val, 0.0);
+                int cg_iter = 0;
+                int rbdtype = 0;
+                int rbdind = 0;
+                int cg_inform = 0;
+                cg_cpp_full(
+                    &nind_work, ind, n, x_work.data(), m, lambda, rho, g_work.data(), &delta,
+                    l_work.data(), u_work.data(), &cgeps, epsnqmp, maxitnqmp, &cgmaxit, nearlyq,
+                    gtype, htvtype, trtype, iprint, theta, sterel, steabs, epsrel, epsabs, infabs,
+                    cg_s.data(), cg_w.data(), cg_y.data(), cg_r.data(), cg_d.data(), cg_sprev.data(),
+                    &cg_iter, &rbdtype, &rbdind, &cg_inform
+                );
+                *cgcnt += cg_iter;
+                if (cg_inform < 0) {
+                    *inform = cg_inform;
+                    return;
+                }
+
+                double amax = *infabs;
+                if (cg_inform == 2) {
+                    amax = 1.0;
+                } else {
+                    for (int i = 0; i < nind_work; ++i) {
+                        if (cg_s[i] > 0.0) {
+                            const double amaxx = (u_work[i] - x_work[i]) / cg_s[i];
+                            if (amaxx < amax) {
+                                amax = amaxx;
+                                rbdind = i + 1;
+                                rbdtype = 2;
+                            }
+                        } else if (cg_s[i] < 0.0) {
+                            const double amaxx = (l_work[i] - x_work[i]) / cg_s[i];
+                            if (amaxx < amax) {
+                                amax = amaxx;
+                                rbdind = i + 1;
+                                rbdtype = 1;
+                            }
+                        }
+                    }
+                }
+
+                int tnls_inform = 0;
+                const int tnint_prev = *tnintcnt;
+                const int tnexg_prev = *tnexgcnt;
+                const int tnexb_prev = *tnexbcnt;
+                const int fcnt_prev_tn = *fcnt;
+                double f_work = *f;
+                std::vector<double> xplus(n_val, 0.0);
+                std::vector<double> xtmp(n_val, 0.0);
+                std::vector<double> xbext(n_val, 0.0);
+                (void)tnls_cpp_subset(
+                    &nind_work, ind, n, x_work.data(), m, lambda, rho, l_work.data(), u_work.data(),
+                    &f_work, g_work.data(), cg_s.data(), &amax, &rbdtype, &rbdind, nint, next, mininterp,
+                    maxextrap, fmin, maxfc, gtype, fcnt, gcnt, tnintcnt, tnexgcnt, tnexbcnt, &tnls_inform,
+                    xplus.data(), xtmp.data(), xbext.data(), gamma, beta, sigma1, sigma2, sterel, steabs,
+                    epsrel, epsabs
+                );
+                if (tnls_inform < 0) {
+                    *inform = tnls_inform;
+                    return;
+                }
+
+                *tniter += 1;
+                if (*tnintcnt > tnint_prev) {
+                    *tnintfe += (*fcnt - fcnt_prev_tn);
+                } else if (*tnexgcnt > tnexg_prev) {
+                    *tnexgfe += (*fcnt - fcnt_prev_tn);
+                } else if (*tnexbcnt > tnexb_prev) {
+                    *tnexbfe += (*fcnt - fcnt_prev_tn);
+                } else {
+                    *tnstpcnt += 1;
+                }
+                *tnfcnt += (*fcnt - fcnt_prev_tn);
+
+                expand_inplace(nind_work, ind, x_work.data());
+                expand_inplace(nind_work, ind, g_work.data());
+                expand_inplace(nind_work, ind, l_work.data());
+                expand_inplace(nind_work, ind, u_work.data());
+
+                for (int i = 0; i < n_val; ++i) {
+                    if (x_work[i] <= l_work[i] + std::max((*epsrel) * std::abs(l_work[i]), *epsabs)) {
+                        x_work[i] = l_work[i];
+                    } else if (x_work[i] >= u_work[i] - std::max((*epsrel) * std::abs(u_work[i]), *epsabs)) {
+                        x_work[i] = u_work[i];
+                    }
+                }
+
+                line_inform = tnls_inform;
+                if (tnls_inform == 6) {
+                    *spgiter += 1;
+                    double lamspg = std::max(1.0, xnorm_full) / std::sqrt(std::max(gpeucn2_after, 1.0e-30));
+                    lamspg = std::min(*lspgma, std::max(*lspgmi, lamspg));
+                    const int fcnt_prev_spg = *fcnt;
+                    int spg_line_inform = 0;
+                    spgls_cpp(
+                        n, x_work.data(), m, lambda, rho, &f_work, g_work.data(), l_work.data(), u_work.data(),
+                        &lamspg, nint, mininterp, fmin, maxfc, fcnt, &spg_line_inform, xtrial_work.data(),
+                        d_work.data(), gamma, sigma1, sigma2, epsrel, epsabs
+                    );
+                    *spgfcnt += (*fcnt - fcnt_prev_spg);
+                    if (spg_line_inform < 0) {
+                        *inform = spg_line_inform;
+                        return;
+                    }
+                    grad_inform = 0;
+                    eval_gradient_full_cpp(
+                        n, x_work.data(), m, lambda, rho, gtype, g_work.data(), sterel, steabs, &grad_inform
+                    );
+                    *gcnt += 1;
+                    if (grad_inform < 0) {
+                        *inform = grad_inform;
+                        return;
+                    }
+                    line_inform = spg_line_inform;
+                }
+
+                for (int i = 0; i < n_val; ++i) {
+                    x[i] = x_work[i];
+                    g[i] = g_work[i];
+                }
+                *f = f_work;
+
+                grad_inform = 0;
+                eval_gradient_full_cpp(n, x, m, lambda, rho, gtype, g, sterel, steabs, &grad_inform);
+                *gcnt += 1;
+                if (grad_inform < 0) {
+                    *inform = grad_inform;
+                    return;
+                }
+            } else {
+                double lamspg = 0.0;
+                if (*iter <= 1 || sty <= 0.0) {
+                    const double xnorm_for_spg = std::sqrt(norm2_kernel(n_val, x));
+                    lamspg = std::max(1.0, xnorm_for_spg) / std::sqrt(std::max(gpeucn2_after, 1.0e-30));
+                } else {
+                    lamspg = sts / sty;
+                }
+                lamspg = std::min(*lspgma, std::max(*lspgmi, lamspg));
+                const int fcnt_before_tail = *fcnt;
+                spgls_cpp(
+                    n, x, m, lambda, rho, f, g, l, u, &lamspg, nint, mininterp, fmin, maxfc, fcnt,
+                    &line_inform, xtrial_work.data(), d_work.data(), gamma, sigma1, sigma2, epsrel, epsabs
+                );
+                *spgfcnt += (*fcnt - fcnt_before_tail);
+                *spgiter += 1;
+
+                if (line_inform < 0) {
+                    *inform = line_inform;
+                    return;
+                }
+
+                grad_inform = 0;
+                eval_gradient_full_cpp(n, x, m, lambda, rho, gtype, g, sterel, steabs, &grad_inform);
+                *gcnt += 1;
+                if (grad_inform < 0) {
+                    *inform = grad_inform;
+                    return;
+                }
+            }
+
+            project_state_and_metrics_cpp(
+                n_val, x, g, l, u, *epsrel, *epsabs, ind, &nind_after, &gpsupn_after, &gpeucn2_after
+            );
+            sts = 0.0;
+            sty = 0.0;
+            if (s_vec != nullptr && y_vec != nullptr) {
+                for (int i = 0; i < n_val; ++i) {
+                    s_vec[i] = x[i] - x_prev[i];
+                    y_vec[i] = g[i] - g_prev[i];
+                    sts += s_vec[i] * s_vec[i];
+                    sty += s_vec[i] * y_vec[i];
+                }
+            }
+            *gpeucn2 = gpeucn2_after;
+            *gpsupn = gpsupn_after;
+            if (*maxitngp > 0) {
+                lastgpns[*iter % (*maxitngp)] = gpeucn2_after;
+            }
+
+            int precision_after_retry_flag = 0;
+            precision_after = packmolprecision_cpp(
+                n, x, m, lambda, rho, &precision_after_retry_flag
+            );
+            if (precision_after_retry_flag < 0) {
+                *inform = precision_after_retry_flag;
+                return;
+            }
+            post_inform = evaluate_post_step_inform_cpp(
+                precision_after,
+                line_inform,
+                gpeucn2_after,
+                *epsgpen,
+                gpsupn_after,
+                *epsgpsn,
+                f_before_retry,
+                *f,
+                *epsnfp,
+                *maxitnfp,
+                *infabs,
+                lastgpns,
+                *maxitngp,
+                *fmin,
+                *iter,
+                *maxit,
+                *fcnt,
+                *maxfc,
+                &progress_state.fprev,
+                &progress_state.bestprog,
+                &progress_state.itnfp
+            );
+            if (post_inform >= 0) {
+                break;
+            }
+            if (*fcnt >= *maxfc || *iter >= *maxit) {
+                break;
+            }
+        }
+    }
+    }
+
+    emit_blocked_tail_debug_cpp(
+        fallback_reason,
+        post_inform,
+        precision_after,
+        nind_after,
+        *iter,
+        *fcnt,
+        gpsupn_after,
+        gpeucn2_after,
+        continuation_budget_used,
+        continuation_steps_done,
+        *maxfc
+    );
+    *inform = finalize_blocked_tail_inform_cpp(
+        post_inform,
+        precision_after,
+        gpeucn2_after,
+        *epsgpen,
+        gpsupn_after,
+        *epsgpsn,
+        *iter,
+        *maxit,
+        *fcnt,
+        *maxfc
+    );
+}
+
+extern "C" void packmol_gencan_fortran_c(
+    const int* n,
+    double* x,
+    const double* l,
+    const double* u,
+    const int* m,
+    const double* lambda,
+    const double* rho,
+    const double* epsgpen,
+    const double* epsgpsn,
+    const int* maxitnfp,
+    const double* epsnfp,
+    const int* maxitngp,
+    const double* fmin,
+    const int* maxit,
+    const int* maxfc,
+    const double* udelta0,
+    const int* ucgmaxit,
+    const int* cgscre,
+    const double* cggpnf,
+    const double* cgepsi,
+    const double* cgepsf,
+    const double* epsnqmp,
+    const int* maxitnqmp,
+    const bool* nearlyq,
+    const double* nint,
+    const double* next,
+    const int* mininterp,
+    const int* maxextrap,
+    const int* gtype,
+    const int* htvtype,
+    const int* trtype,
+    const int* iprint,
+    const int* ncomp,
+    double* f,
+    double* g,
+    double* gpeucn2,
+    double* gpsupn,
+    int* iter,
+    int* fcnt,
+    int* gcnt,
+    int* cgcnt,
+    int* spgiter,
+    int* spgfcnt,
+    int* tniter,
+    int* tnfcnt,
+    int* tnstpcnt,
+    int* tnintcnt,
+    int* tnexgcnt,
+    int* tnexbcnt,
+    int* tnintfe,
+    int* tnexgfe,
+    int* tnexbfe,
+    int* inform,
+    double* s,
+    double* y,
+    double* d,
+    int* ind,
+    double* lastgpns,
+    double* w,
+    const double* eta,
+    const double* delmin,
+    const double* lspgma,
+    const double* lspgmi,
+    const double* theta,
+    const double* gamma,
+    const double* beta,
+    const double* sigma1,
+    const double* sigma2,
+    const double* sterel,
+    const double* steabs,
+    const double* epsrel,
+    const double* epsabs,
+    const double* infrel,
+    const double* infabs
+);
+
+extern "C" void packmol_gencan_gencan_bridge(
+    const int* n,
+    double* x,
+    const double* l,
+    const double* u,
+    const int* m,
+    const double* lambda,
+    const double* rho,
+    const double* epsgpen,
+    const double* epsgpsn,
+    const int* maxitnfp,
+    const double* epsnfp,
+    const int* maxitngp,
+    const double* fmin,
+    const int* maxit,
+    const int* maxfc,
+    const double* udelta0,
+    const int* ucgmaxit,
+    const int* cgscre,
+    const double* cggpnf,
+    const double* cgepsi,
+    const double* cgepsf,
+    const double* epsnqmp,
+    const int* maxitnqmp,
+    const bool* nearlyq,
+    const double* nint,
+    const double* next,
+    const int* mininterp,
+    const int* maxextrap,
+    const int* gtype,
+    const int* htvtype,
+    const int* trtype,
+    const int* iprint,
+    const int* ncomp,
+    double* f,
+    double* g,
+    double* gpeucn2,
+    double* gpsupn,
+    int* iter,
+    int* fcnt,
+    int* gcnt,
+    int* cgcnt,
+    int* spgiter,
+    int* spgfcnt,
+    int* tniter,
+    int* tnfcnt,
+    int* tnstpcnt,
+    int* tnintcnt,
+    int* tnexgcnt,
+    int* tnexbcnt,
+    int* tnintfe,
+    int* tnexgfe,
+    int* tnexbfe,
+    int* inform,
+    double* s,
+    double* y,
+    double* d,
+    int* ind,
+    double* lastgpns,
+    double* w,
+    const double* eta,
+    const double* delmin,
+    const double* lspgma,
+    const double* lspgmi,
+    const double* theta,
+    const double* gamma,
+    const double* beta,
+    const double* sigma1,
+    const double* sigma2,
+    const double* sterel,
+    const double* steabs,
+    const double* epsrel,
+    const double* epsabs,
+    const double* infrel,
+    const double* infabs
+);
+
+bool try_spg_post_cpp_replay_tail_cpp(
+    const char* fallback_reason,
+    const int* n,
+    double* x,
+    const double* l,
+    const double* u,
+    const int* m,
+    const double* lambda,
+    const double* rho,
+    const double* epsgpen,
+    const double* epsgpsn,
+    const int* maxitnfp,
+    const double* epsnfp,
+    const int* maxitngp,
+    const double* fmin,
+    const int* maxit,
+    const int* maxfc,
+    const double* udelta0,
+    const int* ucgmaxit,
+    const int* cgscre,
+    const double* cggpnf,
+    const double* cgepsi,
+    const double* cgepsf,
+    const double* epsnqmp,
+    const int* maxitnqmp,
+    const bool* nearlyq,
+    const double* nint,
+    const double* next,
+    const int* mininterp,
+    const int* maxextrap,
+    const int* gtype,
+    const int* htvtype,
+    const int* trtype,
+    const int* iprint,
+    const int* ncomp,
+    double* f,
+    double* g,
+    double* gpeucn2,
+    double* gpsupn,
+    int* iter,
+    int* fcnt,
+    int* gcnt,
+    int* cgcnt,
+    int* spgiter,
+    int* spgfcnt,
+    int* tniter,
+    int* tnfcnt,
+    int* tnstpcnt,
+    int* tnintcnt,
+    int* tnexgcnt,
+    int* tnexbcnt,
+    int* tnintfe,
+    int* tnexgfe,
+    int* tnexbfe,
+    int* inform,
+    double* s,
+    double* y,
+    double* d,
+    int* ind,
+    double* lastgpns,
+    double* w,
+    const double* eta,
+    const double* delmin,
+    const double* lspgma,
+    const double* lspgmi,
+    const double* theta,
+    const double* gamma,
+    const double* beta,
+    const double* sigma1,
+    const double* sigma2,
+    const double* sterel,
+    const double* steabs,
+    const double* epsrel,
+    const double* epsabs,
+    const double* infrel,
+    const double* infabs
+) {
+    if (fallback_reason == nullptr || std::string(fallback_reason) != "spg_post_nonterminal") {
+        return false;
+    }
+    if (active_impl_mode() != GencanImplMode::kCpp) {
+        return false;
+    }
+    const bool ab_compare_spg_post_replay = ab_compare_enabled();
+    if (!ab_compare_spg_post_replay &&
+        (!handoff_cpp_tail_enabled() || !handoff_cpp_tail_allow_spg_post_enabled())) {
+        return false;
+    }
+    if (!ab_compare_spg_post_replay &&
+        init1_phase_active_cpp() &&
+        !handoff_cpp_tail_allow_init1_enabled()) {
+        return false;
+    }
+    const int max_depth = spg_post_cpp_replay_max_depth();
+    if (g_spg_post_cpp_replay_depth >= max_depth) {
+        return false;
+    }
+    g_spg_post_cpp_replay_depth += 1;
+    if (gencan_debug_enabled()) {
+        std::fprintf(
+            stderr,
+            "[gencan-cpp-spg-post-cpp-replay] depth=%d max_depth=%d mode=%d\n",
+            g_spg_post_cpp_replay_depth,
+            max_depth,
+            static_cast<int>(active_impl_mode())
+        );
+    }
+    packmol_gencan_gencan_bridge(
+        n, x, l, u, m, lambda, rho, epsgpen, epsgpsn, maxitnfp, epsnfp, maxitngp, fmin, maxit,
+        maxfc, udelta0, ucgmaxit, cgscre, cggpnf, cgepsi, cgepsf, epsnqmp, maxitnqmp, nearlyq,
+        nint, next, mininterp, maxextrap, gtype, htvtype, trtype, iprint, ncomp, f, g, gpeucn2,
+        gpsupn, iter, fcnt, gcnt, cgcnt, spgiter, spgfcnt, tniter, tnfcnt, tnstpcnt, tnintcnt,
+        tnexgcnt, tnexbcnt, tnintfe, tnexgfe, tnexbfe, inform, s, y, d, ind, lastgpns, w, eta,
+        delmin, lspgma, lspgmi, theta, gamma, beta, sigma1, sigma2, sterel, steabs, epsrel, epsabs,
+        infrel, infabs
+    );
+    if (*inform >= 0) {
+        apply_spg_post_cpp_replay_bookkeeping(iter, fcnt, gcnt);
+        if (gencan_debug_enabled()) {
+            std::fprintf(
+                stderr,
+                "[gencan-cpp-spg-post-cpp-replay-bookkeeping] iter=%d fcnt=%d gcnt=%d\n",
+                *iter,
+                *fcnt,
+                *gcnt
+            );
+        }
+    }
+    g_spg_post_cpp_replay_depth -= 1;
+    return true;
+}
+
+bool try_tn_post_cpp_replay_tail_cpp(
+    const char* fallback_reason,
+    const int* n,
+    double* x,
+    const double* l,
+    const double* u,
+    const int* m,
+    const double* lambda,
+    const double* rho,
+    const double* epsgpen,
+    const double* epsgpsn,
+    const int* maxitnfp,
+    const double* epsnfp,
+    const int* maxitngp,
+    const double* fmin,
+    const int* maxit,
+    const int* maxfc,
+    const double* udelta0,
+    const int* ucgmaxit,
+    const int* cgscre,
+    const double* cggpnf,
+    const double* cgepsi,
+    const double* cgepsf,
+    const double* epsnqmp,
+    const int* maxitnqmp,
+    const bool* nearlyq,
+    const double* nint,
+    const double* next,
+    const int* mininterp,
+    const int* maxextrap,
+    const int* gtype,
+    const int* htvtype,
+    const int* trtype,
+    const int* iprint,
+    const int* ncomp,
+    double* f,
+    double* g,
+    double* gpeucn2,
+    double* gpsupn,
+    int* iter,
+    int* fcnt,
+    int* gcnt,
+    int* cgcnt,
+    int* spgiter,
+    int* spgfcnt,
+    int* tniter,
+    int* tnfcnt,
+    int* tnstpcnt,
+    int* tnintcnt,
+    int* tnexgcnt,
+    int* tnexbcnt,
+    int* tnintfe,
+    int* tnexgfe,
+    int* tnexbfe,
+    int* inform,
+    double* s,
+    double* y,
+    double* d,
+    int* ind,
+    double* lastgpns,
+    double* w,
+    const double* eta,
+    const double* delmin,
+    const double* lspgma,
+    const double* lspgmi,
+    const double* theta,
+    const double* gamma,
+    const double* beta,
+    const double* sigma1,
+    const double* sigma2,
+    const double* sterel,
+    const double* steabs,
+    const double* epsrel,
+    const double* epsabs,
+    const double* infrel,
+    const double* infabs
+) {
+    const std::string reason = fallback_reason == nullptr ? "" : std::string(fallback_reason);
+    if (fallback_reason == nullptr || !is_tn_tail_reason_cpp(reason)) {
+        return false;
+    }
+    const bool nested_spg_replay = g_spg_post_cpp_replay_depth > 0;
+    if (nested_spg_replay && !handoff_cpp_tail_allow_tn_post_explicitly_enabled()) {
+        return false;
+    }
+    const bool replay_enabled = tn_post_cpp_replay_tail_enabled();
+    const bool cpp_mode = active_impl_mode() == GencanImplMode::kCpp && !ab_compare_enabled();
+    const int max_depth = tn_post_cpp_replay_max_depth();
+    const bool depth_ok = g_tn_post_cpp_replay_depth < max_depth;
+    if (gencan_debug_enabled()) {
+        std::fprintf(
+            stderr,
+            "[gencan-cpp-tn-post-cpp-replay-gate] reason=%s mode=%d replay_enabled=%d cpp_mode=%d depth=%d max_depth=%d\n",
+            reason.c_str(),
+            static_cast<int>(active_impl_mode()),
+            replay_enabled ? 1 : 0,
+            cpp_mode ? 1 : 0,
+            g_tn_post_cpp_replay_depth,
+            max_depth
+        );
+    }
+    if (!replay_enabled || !cpp_mode || !depth_ok) {
+        return false;
+    }
+    g_tn_post_cpp_replay_depth += 1;
+    if (gencan_debug_enabled()) {
+        std::fprintf(
+            stderr,
+            "[gencan-cpp-tn-post-cpp-replay] depth=%d max_depth=%d mode=%d\n",
+            g_tn_post_cpp_replay_depth,
+            max_depth,
+            static_cast<int>(active_impl_mode())
+        );
+    }
+    packmol_gencan_gencan_bridge(
+        n, x, l, u, m, lambda, rho, epsgpen, epsgpsn, maxitnfp, epsnfp, maxitngp, fmin, maxit,
+        maxfc, udelta0, ucgmaxit, cgscre, cggpnf, cgepsi, cgepsf, epsnqmp, maxitnqmp, nearlyq,
+        nint, next, mininterp, maxextrap, gtype, htvtype, trtype, iprint, ncomp, f, g, gpeucn2,
+        gpsupn, iter, fcnt, gcnt, cgcnt, spgiter, spgfcnt, tniter, tnfcnt, tnstpcnt, tnintcnt,
+        tnexgcnt, tnexbcnt, tnintfe, tnexgfe, tnexbfe, inform, s, y, d, ind, lastgpns, w, eta,
+        delmin, lspgma, lspgmi, theta, gamma, beta, sigma1, sigma2, sterel, steabs, epsrel, epsabs,
+        infrel, infabs
+    );
+    g_tn_post_cpp_replay_depth -= 1;
+    return true;
+}
+
+void emit_tn_shadow_report_cpp(
+    const int n_val,
+    const double* x,
+    const double* g,
+    const std::vector<double>& x_before,
+    const std::vector<double>& g_before,
+    const double f_before,
+    const int inform_before,
+    const int iter_before,
+    const int fcnt_before,
+    const int gcnt_before,
+    const int cgcnt_before,
+    const int spgiter_before,
+    const int tniter_before,
+    const double f_after,
+    const int inform_after,
+    const int iter_after,
+    const int fcnt_after,
+    const int gcnt_after,
+    const int cgcnt_after,
+    const int spgiter_after,
+    const int tniter_after
+) {
+    double max_abs_dx = 0.0;
+    double max_abs_dg = 0.0;
+    for (int i = 0; i < n_val; ++i) {
+        max_abs_dx = std::max(max_abs_dx, std::abs(x[i] - x_before[i]));
+        max_abs_dg = std::max(max_abs_dg, std::abs(g[i] - g_before[i]));
+    }
+    std::fprintf(
+        stderr,
+        "[gencan-tn-post-shadow] mode=%d inform:%d->%d iter:+%d fcnt:+%d gcnt:+%d cgcnt:+%d spgiter:+%d tniter:+%d df=%.16e max|dx|=%.16e max|dg|=%.16e\n",
+        static_cast<int>(active_impl_mode()),
+        inform_before,
+        inform_after,
+        iter_after - iter_before,
+        fcnt_after - fcnt_before,
+        gcnt_after - gcnt_before,
+        cgcnt_after - cgcnt_before,
+        spgiter_after - spgiter_before,
+        tniter_after - tniter_before,
+        f_after - f_before,
+        max_abs_dx,
+        max_abs_dg
+    );
+}
+
+struct TnShadowSnapshot {
+    bool enabled = false;
+    std::vector<double> x_before;
+    std::vector<double> g_before;
+    double f_before = 0.0;
+    int inform_before = 0;
+    int iter_before = 0;
+    int fcnt_before = 0;
+    int gcnt_before = 0;
+    int cgcnt_before = 0;
+    int spgiter_before = 0;
+    int tniter_before = 0;
+};
+
+TnShadowSnapshot capture_tn_shadow_snapshot_cpp(
+    const bool enabled,
+    const int n_val,
+    const double* x,
+    const double* g,
+    const double* f,
+    const int* inform,
+    const int* iter,
+    const int* fcnt,
+    const int* gcnt,
+    const int* cgcnt,
+    const int* spgiter,
+    const int* tniter
+) {
+    TnShadowSnapshot snapshot;
+    snapshot.enabled = enabled;
+    if (!enabled) {
+        return snapshot;
+    }
+    snapshot.x_before.assign(x, x + n_val);
+    snapshot.g_before.assign(g, g + n_val);
+    snapshot.f_before = *f;
+    snapshot.inform_before = *inform;
+    snapshot.iter_before = *iter;
+    snapshot.fcnt_before = *fcnt;
+    snapshot.gcnt_before = *gcnt;
+    snapshot.cgcnt_before = *cgcnt;
+    snapshot.spgiter_before = *spgiter;
+    snapshot.tniter_before = *tniter;
+    return snapshot;
+}
+
+void maybe_emit_tn_shadow_report_cpp(
+    const TnShadowSnapshot& snapshot,
+    const int n_val,
+    const double* x,
+    const double* g,
+    const double f_after,
+    const int inform_after,
+    const int iter_after,
+    const int fcnt_after,
+    const int gcnt_after,
+    const int cgcnt_after,
+    const int spgiter_after,
+    const int tniter_after
+) {
+    if (!snapshot.enabled) {
+        return;
+    }
+    emit_tn_shadow_report_cpp(
+        n_val,
+        x,
+        g,
+        snapshot.x_before,
+        snapshot.g_before,
+        snapshot.f_before,
+        snapshot.inform_before,
+        snapshot.iter_before,
+        snapshot.fcnt_before,
+        snapshot.gcnt_before,
+        snapshot.cgcnt_before,
+        snapshot.spgiter_before,
+        snapshot.tniter_before,
+        f_after,
+        inform_after,
+        iter_after,
+        fcnt_after,
+        gcnt_after,
+        cgcnt_after,
+        spgiter_after,
+        tniter_after
+    );
+}
+
+void continue_spg_post_nonterminal_cpp(
+    const int n_val,
+    const int* n,
+    double* x,
+    const double* l,
+    const double* u,
+    const int* m,
+    const double* lambda,
+    const double* rho,
+    const double* epsgpen,
+    const double* epsgpsn,
+    const int* maxitnfp,
+    const double* epsnfp,
+    const int* maxitngp,
+    const double* fmin,
+    const int* maxit,
+    const int* maxfc,
+    const double* udelta0,
+    const int* ucgmaxit,
+    const int* cgscre,
+    const double* cggpnf,
+    const double* cgepsi,
+    const double* cgepsf,
+    const double* epsnqmp,
+    const int* maxitnqmp,
+    const bool* nearlyq,
+    const double* nint,
+    const double* next,
+    const int* mininterp,
+    const int* maxextrap,
+    const int* gtype,
+    const int* htvtype,
+    const int* trtype,
+    const int* iprint,
+    const int* ncomp,
+    double* f,
+    double* g,
+    double* gpeucn2,
+    double* gpsupn,
+    int* iter,
+    int* fcnt,
+    int* gcnt,
+    int* cgcnt,
+    int* spgiter,
+    int* spgfcnt,
+    int* tniter,
+    int* tnfcnt,
+    int* tnstpcnt,
+    int* tnintcnt,
+    int* tnexgcnt,
+    int* tnexbcnt,
+    int* tnintfe,
+    int* tnexgfe,
+    int* tnexbfe,
+    int* inform,
+    double* s,
+    double* y,
+    double* d,
+    int* ind,
+    double* lastgpns,
+    double* w,
+    const double* eta,
+    const double* delmin,
+    const double* lspgma,
+    const double* lspgmi,
+    const double* theta,
+    const double* gamma,
+    const double* beta,
+    const double* sigma1,
+    const double* sigma2,
+    const double* sterel,
+    const double* steabs,
+    const double* epsrel,
+    const double* epsabs,
+    const double* infrel,
+    const double* infabs,
+    const double progress_fprev,
+    const double progress_bestprog,
+    const int progress_itnfp
+) {
+    if (try_spg_post_cpp_replay_tail_cpp(
+            "spg_post_nonterminal", n, x, l, u, m, lambda, rho, epsgpen, epsgpsn, maxitnfp, epsnfp,
+            maxitngp, fmin, maxit, maxfc, udelta0, ucgmaxit, cgscre, cggpnf, cgepsi, cgepsf,
+            epsnqmp, maxitnqmp, nearlyq, nint, next, mininterp, maxextrap, gtype, htvtype,
+            trtype, iprint, ncomp, f, g, gpeucn2, gpsupn, iter, fcnt, gcnt, cgcnt, spgiter,
+            spgfcnt, tniter, tnfcnt, tnstpcnt, tnintcnt, tnexgcnt, tnexbcnt, tnintfe, tnexgfe,
+            tnexbfe, inform, s, y, d, ind, lastgpns, w, eta, delmin, lspgma, lspgmi, theta,
+            gamma, beta, sigma1, sigma2, sterel, steabs, epsrel, epsabs, infrel, infabs
+        )) {
+        return;
+    }
+    execute_blocked_tail_cpp(
+        "spg_post_nonterminal", n_val, n, x, m, lambda, rho, gtype, g, l, u, epsrel, epsabs, ind,
+        gpeucn2, gpsupn, maxitngp, lastgpns, iter, maxfc, fcnt, gcnt, cgcnt, spgiter, spgfcnt,
+        tniter, tnfcnt, tnstpcnt, tnintcnt, tnexgcnt, tnexbcnt, tnintfe, tnexgfe, tnexbfe,
+        s, y, w, udelta0, ucgmaxit, cgscre, cggpnf, cgepsi, cgepsf, epsnqmp, maxitnqmp, nearlyq,
+        htvtype, trtype, iprint, ncomp, eta, delmin, lspgma, lspgmi, nint, next, mininterp,
+        maxextrap, fmin, f, theta, gamma, beta, sigma1, sigma2, sterel, steabs,
+        epsgpen, epsgpsn, maxitnfp, epsnfp, infabs, maxit, inform,
+        &progress_fprev, &progress_bestprog, &progress_itnfp
+    );
+}
+
+void continue_tn_tail_reason_cpp(
+    const char* fallback_reason,
+    const int n_val,
+    const TnShadowSnapshot& tn_shadow,
+    const bool fallback_progress_seed_valid,
+    const double fallback_progress_fprev,
+    const double fallback_progress_bestprog,
+    const int fallback_progress_itnfp,
+    const bool fallback_cg_schedule_seed_valid,
+    const double fallback_cg_schedule_acgeps,
+    const double fallback_cg_schedule_bcgeps,
+    const double fallback_cg_schedule_gpeucn20,
+    const double fallback_cg_schedule_gpsupn0,
+    const int* n,
+    double* x,
+    const double* l,
+    const double* u,
+    const int* m,
+    const double* lambda,
+    const double* rho,
+    const double* epsgpen,
+    const double* epsgpsn,
+    const int* maxitnfp,
+    const double* epsnfp,
+    const int* maxitngp,
+    const double* fmin,
+    const int* maxit,
+    const int* maxfc,
+    const double* udelta0,
+    const int* ucgmaxit,
+    const int* cgscre,
+    const double* cggpnf,
+    const double* cgepsi,
+    const double* cgepsf,
+    const double* epsnqmp,
+    const int* maxitnqmp,
+    const bool* nearlyq,
+    const double* nint,
+    const double* next,
+    const int* mininterp,
+    const int* maxextrap,
+    const int* gtype,
+    const int* htvtype,
+    const int* trtype,
+    const int* iprint,
+    const int* ncomp,
+    double* f,
+    double* g,
+    double* gpeucn2,
+    double* gpsupn,
+    int* iter,
+    int* fcnt,
+    int* gcnt,
+    int* cgcnt,
+    int* spgiter,
+    int* spgfcnt,
+    int* tniter,
+    int* tnfcnt,
+    int* tnstpcnt,
+    int* tnintcnt,
+    int* tnexgcnt,
+    int* tnexbcnt,
+    int* tnintfe,
+    int* tnexgfe,
+    int* tnexbfe,
+    int* inform,
+    double* s,
+    double* y,
+    double* d,
+    int* ind,
+    double* lastgpns,
+    double* w,
+    const double* eta,
+    const double* delmin,
+    const double* lspgma,
+    const double* lspgmi,
+    const double* theta,
+    const double* gamma,
+    const double* beta,
+    const double* sigma1,
+    const double* sigma2,
+    const double* sterel,
+    const double* steabs,
+    const double* epsrel,
+    const double* epsabs,
+    const double* infrel,
+    const double* infabs
+) {
+    if (try_tn_post_cpp_replay_tail_cpp(
+            fallback_reason, n, x, l, u, m, lambda, rho, epsgpen, epsgpsn, maxitnfp, epsnfp,
+            maxitngp, fmin, maxit, maxfc, udelta0, ucgmaxit, cgscre, cggpnf, cgepsi, cgepsf,
+            epsnqmp, maxitnqmp, nearlyq, nint, next, mininterp, maxextrap, gtype, htvtype,
+            trtype, iprint, ncomp, f, g, gpeucn2, gpsupn, iter, fcnt, gcnt, cgcnt, spgiter,
+            spgfcnt, tniter, tnfcnt, tnstpcnt, tnintcnt, tnexgcnt, tnexbcnt, tnintfe, tnexgfe,
+            tnexbfe, inform, s, y, d, ind, lastgpns, w, eta, delmin, lspgma, lspgmi, theta,
+            gamma, beta, sigma1, sigma2, sterel, steabs, epsrel, epsabs, infrel, infabs
+        )) {
+        maybe_emit_tn_shadow_report_cpp(
+            tn_shadow, n_val, x, g, *f, *inform, *iter, *fcnt, *gcnt, *cgcnt, *spgiter, *tniter
+        );
+        return;
+    }
+    const TnPostContinuationInputs continuation_inputs{
+        n, x, m, lambda, rho, gtype, g, l, u, epsrel, epsabs, ind, gpeucn2, gpsupn,
+        maxitngp, lastgpns, iter, maxfc, fcnt, gcnt, cgcnt, spgiter, spgfcnt,
+        tniter, tnfcnt, tnstpcnt, tnintcnt, tnexgcnt, tnexbcnt, tnintfe, tnexgfe,
+        tnexbfe, s, y, udelta0, ucgmaxit, cgscre, cggpnf, cgepsi, cgepsf, epsnqmp,
+        maxitnqmp, nearlyq, htvtype, trtype, iprint, ncomp, eta, delmin, lspgma,
+        lspgmi, nint, next, mininterp, maxextrap, fmin, f, theta, gamma, beta,
+        sigma1, sigma2, sterel, steabs, epsgpen, epsgpsn, maxitnfp, epsnfp, infrel,
+        infabs, maxit, fallback_cg_schedule_seed_valid, fallback_cg_schedule_acgeps,
+        fallback_cg_schedule_bcgeps, fallback_cg_schedule_gpeucn20, fallback_cg_schedule_gpsupn0,
+        inform
+    };
+    execute_tn_post_blocked_tail_cpp(
+        fallback_reason,
+        n_val,
+        continuation_inputs,
+        fallback_progress_seed_valid ? &fallback_progress_fprev : nullptr,
+        fallback_progress_seed_valid ? &fallback_progress_bestprog : nullptr,
+        fallback_progress_seed_valid ? &fallback_progress_itnfp : nullptr
+    );
+    maybe_emit_tn_shadow_report_cpp(
+        tn_shadow, n_val, x, g, *f, *inform, *iter, *fcnt, *gcnt, *cgcnt, *spgiter, *tniter
+    );
 }
 
 }  // namespace
@@ -370,6 +2657,86 @@ extern "C" void packmol_precision_state_fortran_c(
     double* fdist_value,
     double* frest_value
 );
+
+extern "C" void packmol_computef_fortran_c(
+    const int* n,
+    const double* x,
+    double* f
+);
+
+extern "C" void packmol_computeg_fortran_c(
+    const int* n,
+    const double* x,
+    double* g
+);
+
+extern "C" double packmol_input_precision;
+extern "C" double packmol_fdist;
+extern "C" double packmol_frest;
+
+extern "C" void packmol_evalal_fortran_c(
+    const int* n,
+    const double* x,
+    const int* m,
+    const double* lambda,
+    const double* rho,
+    double* f,
+    int* flag
+) {
+    (void)m;
+    (void)lambda;
+    (void)rho;
+    packmol_computef_fortran_c(n, x, f);
+    *flag = 0;
+}
+
+extern "C" void packmol_evalnal_fortran_c(
+    const int* n,
+    double* x,
+    const int* m,
+    const double* lambda,
+    const double* rho,
+    double* g,
+    int* flag
+) {
+    (void)m;
+    (void)lambda;
+    (void)rho;
+    packmol_computeg_fortran_c(n, x, g);
+    *flag = 0;
+}
+
+extern "C" void packmol_evalnaldiff_fortran_c(
+    const int* n,
+    double* x,
+    const int* m,
+    const double* lambda,
+    const double* rho,
+    double* g,
+    const double* sterel,
+    const double* steabs,
+    int* flag
+) {
+    (void)sterel;
+    (void)steabs;
+    packmol_evalnal_fortran_c(n, x, m, lambda, rho, g, flag);
+}
+
+extern "C" void packmol_precision_state_fortran_c(
+    double* precision_value,
+    double* fdist_value,
+    double* frest_value
+) {
+    *precision_value = packmol_input_precision;
+    *fdist_value = packmol_fdist;
+    *frest_value = packmol_frest;
+}
+
+extern "C" void packmol_gencan_set_init1_phase_c(
+    const int* flag
+) {
+    g_init1_phase_active = (flag != nullptr && *flag != 0) ? 1 : 0;
+}
 
 namespace {
 
@@ -635,24 +3002,314 @@ void eval_gradient_full_cpp(
     }
 }
 
-bool packmolprecision_cpp(
-    const int* n,
-    double* x,
-    const int* m,
-    const double* lambda,
-    const double* rho
-) {
-    int eval_flag = 0;
-    double f_unused = 0.0;
-    packmol_evalal_fortran_c(n, x, m, lambda, rho, &f_unused, &eval_flag);
-    if (eval_flag < 0) {
-        return false;
-    }
+bool packmolprecision_from_state_cpp() {
     double precision_value = 0.0;
     double fdist_value = 0.0;
     double frest_value = 0.0;
     packmol_precision_state_fortran_c(&precision_value, &fdist_value, &frest_value);
     return fdist_value < precision_value && frest_value < precision_value;
+}
+
+bool init1_phase_active_cpp() {
+    return g_init1_phase_active != 0;
+}
+
+struct TailFallbackPolicy {
+    bool tn_post_case;
+    bool spg_post_case;
+    bool tn_handoff_requested;
+    bool spg_post_handoff;
+    bool allow_cpp_tail_reduction;
+    bool handoff_cpp_tail;
+    bool handoff_cpp_tail_init1_guarded;
+    bool handoff_cpp_tail_spg_guarded;
+    bool suppress_fallback_marker;
+    bool effective_block_tail;
+};
+
+TailFallbackPolicy make_tail_fallback_policy(const char* fallback_reason) {
+    const std::string reason(fallback_reason == nullptr ? "" : fallback_reason);
+    const bool tn_post_case = is_tn_tail_reason_cpp(reason);
+    const bool spg_post_case = reason == "spg_post_nonterminal";
+    const bool tn_handoff_requested =
+        tn_post_handoff_enabled() || tn_post_handoff_safe_enabled() || tn_post_handoff_unsafe_enabled();
+    const bool spg_post_handoff = spg_post_handoff_enabled() && spg_post_case;
+    const bool init1_active = init1_phase_active_cpp();
+    bool tn_tail_allowed = !tn_post_case || handoff_cpp_tail_allow_tn_post_enabled();
+    if (tn_post_case &&
+        g_spg_post_cpp_replay_depth > 0 &&
+        !handoff_cpp_tail_allow_tn_post_explicitly_enabled()) {
+        // The nested TN tail reached from SPG replay still drifts in state and
+        // counters unless the caller explicitly opts into that experimental path.
+        tn_tail_allowed = false;
+    }
+    const bool spg_tail_allowed = !spg_post_case || handoff_cpp_tail_allow_spg_post_enabled();
+    const bool allow_cpp_tail_reduction =
+        cpp_tail_reduction_enabled() &&
+        active_impl_mode() != GencanImplMode::kFortran &&
+        !ab_compare_enabled() &&
+        !tn_post_handoff_unsafe_enabled() &&
+        !spg_post_handoff_enabled();
+    const bool handoff_cpp_tail =
+        handoff_cpp_tail_enabled() &&
+        active_impl_mode() == GencanImplMode::kCpp &&
+        !ab_compare_enabled() &&
+        (!init1_active || handoff_cpp_tail_allow_init1_enabled()) &&
+        tn_tail_allowed &&
+        spg_tail_allowed &&
+        (tn_handoff_requested || spg_post_handoff);
+    const bool handoff_cpp_tail_init1_guarded =
+        handoff_cpp_tail_enabled() &&
+        active_impl_mode() == GencanImplMode::kCpp &&
+        !ab_compare_enabled() &&
+        init1_active &&
+        !handoff_cpp_tail_allow_init1_enabled() &&
+        (tn_handoff_requested || spg_post_handoff);
+    const bool handoff_cpp_tail_spg_guarded =
+        handoff_cpp_tail_enabled() &&
+        active_impl_mode() == GencanImplMode::kCpp &&
+        !ab_compare_enabled() &&
+        spg_post_case &&
+        !handoff_cpp_tail_allow_spg_post_enabled() &&
+        (tn_handoff_requested || spg_post_handoff);
+    const bool suppress_fallback_marker =
+        (tn_post_case && tn_handoff_requested) ||
+        spg_post_case ||
+        allow_cpp_tail_reduction;
+    const bool force_cpp_tn_post_tail =
+        tn_post_case &&
+        active_impl_mode() == GencanImplMode::kCpp &&
+        !ab_compare_enabled() &&
+        cpp_tail_reduction_enabled() &&
+        !tn_handoff_requested &&
+        !spg_post_handoff_enabled();
+    const bool force_cpp_tail_in_cpp_mode =
+        active_impl_mode() == GencanImplMode::kCpp &&
+        !ab_compare_enabled() &&
+        !tn_handoff_requested &&
+        !spg_post_handoff_enabled();
+    const bool force_cpp_tail_in_ab_init1_tn_post =
+        active_impl_mode() != GencanImplMode::kFortran &&
+        ab_compare_enabled() &&
+        init1_active &&
+        tn_post_case;
+    const bool force_cpp_tail_in_ab_mode =
+        active_impl_mode() == GencanImplMode::kAb &&
+        ab_compare_enabled() &&
+        !init1_active &&
+        !tn_handoff_requested &&
+        !spg_post_handoff_enabled();
+    const bool effective_block_tail =
+        block_cpp_tail_enabled() ||
+        allow_cpp_tail_reduction ||
+        handoff_cpp_tail ||
+        force_cpp_tn_post_tail ||
+        force_cpp_tail_in_ab_init1_tn_post ||
+        force_cpp_tail_in_cpp_mode ||
+        force_cpp_tail_in_ab_mode;
+    return TailFallbackPolicy{
+        tn_post_case,
+        spg_post_case,
+        tn_handoff_requested,
+        spg_post_handoff,
+        allow_cpp_tail_reduction,
+        handoff_cpp_tail,
+        handoff_cpp_tail_init1_guarded,
+        handoff_cpp_tail_spg_guarded,
+        suppress_fallback_marker,
+        effective_block_tail
+    };
+}
+
+struct FallbackPostDebugInfo {
+    bool captured = false;
+    int line_inform = 0;
+    int post_inform = 0;
+    int nind = 0;
+    double f_before = 0.0;
+    double f_after = 0.0;
+    double gpsupn = 0.0;
+    double gpeucn2 = 0.0;
+};
+
+void emit_fallback_debug_cpp(
+    const TailFallbackPolicy& tail_policy,
+    const char* fallback_reason,
+    const FallbackPostDebugInfo& tn_post_debug,
+    const FallbackPostDebugInfo& spg_post_debug
+) {
+    if (!gencan_debug_enabled()) {
+        return;
+    }
+    std::fprintf(
+        stderr,
+        "[gencan-cpp-tail-policy] reason=%s mode=%d tn_case=%d spg_case=%d tn_handoff_req=%d spg_handoff=%d allow_cpp_tail_reduction=%d handoff_cpp_tail=%d effective_block_tail=%d\n",
+        fallback_reason,
+        static_cast<int>(active_impl_mode()),
+        tail_policy.tn_post_case ? 1 : 0,
+        tail_policy.spg_post_case ? 1 : 0,
+        tail_policy.tn_handoff_requested ? 1 : 0,
+        tail_policy.spg_post_handoff ? 1 : 0,
+        tail_policy.allow_cpp_tail_reduction ? 1 : 0,
+        tail_policy.handoff_cpp_tail ? 1 : 0,
+        tail_policy.effective_block_tail ? 1 : 0
+    );
+    const bool tn_handoff_active = tail_policy.tn_post_case && tail_policy.tn_handoff_requested;
+    const bool tn_unsafe = tn_post_handoff_unsafe_enabled();
+    if (tn_handoff_active) {
+        std::fprintf(stderr, "[gencan-cpp-handoff] reason=%s mode=%d\n", fallback_reason, static_cast<int>(active_impl_mode()));
+        bool replay = tn_post_handoff_cpp_replay_enabled();
+        if (tn_unsafe && !replay) {
+            std::fprintf(stderr, "[gencan-cpp-handoff-canonicalize-cpp-replay-forced] reason=%s mode=%d\n", fallback_reason, static_cast<int>(active_impl_mode()));
+            replay = true;
+        }
+        if (tn_post_handoff_canonicalize_enabled() && replay) {
+            std::fprintf(stderr, "[gencan-cpp-handoff-canonicalize-cpp-replay] reason=%s mode=%d\n", fallback_reason, static_cast<int>(active_impl_mode()));
+        }
+    }
+    if (tail_policy.spg_post_handoff) {
+        std::fprintf(stderr, "[gencan-cpp-handoff] reason=spg_post_nonterminal mode=%d\n", static_cast<int>(active_impl_mode()));
+        std::fprintf(stderr, "[gencan-cpp-handoff-cpp] reason=spg_post_nonterminal mode=%d\n", static_cast<int>(active_impl_mode()));
+    }
+    if (tail_policy.handoff_cpp_tail) {
+        std::fprintf(stderr, "[gencan-cpp-handoff-cpp-tail] reason=%s mode=%d\n", fallback_reason, static_cast<int>(active_impl_mode()));
+    }
+    if (tail_policy.handoff_cpp_tail_init1_guarded) {
+        std::fprintf(
+            stderr,
+            "[gencan-cpp-handoff-cpp-tail-init1-guard] reason=%s mode=%d\n",
+            fallback_reason,
+            static_cast<int>(active_impl_mode())
+        );
+    }
+    if (tail_policy.handoff_cpp_tail_spg_guarded) {
+        std::fprintf(
+            stderr,
+            "[gencan-cpp-handoff-cpp-tail-spg-guard] reason=%s mode=%d\n",
+            fallback_reason,
+            static_cast<int>(active_impl_mode())
+        );
+    }
+    if (!tail_policy.suppress_fallback_marker) {
+        std::fprintf(
+            stderr,
+            "[gencan-cpp-fallback] reason=%s mode=%d\n",
+            fallback_reason,
+            static_cast<int>(active_impl_mode())
+        );
+    }
+    if (std::string(fallback_reason) == "tn_post_nonterminal" && tn_post_debug.captured) {
+        std::fprintf(
+            stderr,
+            "[gencan-cpp-fallback-tn-post] line_inform=%d post_inform=%d nind=%d f_before=%.16e f_after=%.16e gpsupn=%.16e gpeucn2=%.16e\n",
+            tn_post_debug.line_inform,
+            tn_post_debug.post_inform,
+            tn_post_debug.nind,
+            tn_post_debug.f_before,
+            tn_post_debug.f_after,
+            tn_post_debug.gpsupn,
+            tn_post_debug.gpeucn2
+        );
+    }
+    if (std::string(fallback_reason) == "spg_post_nonterminal" && spg_post_debug.captured) {
+        std::fprintf(
+            stderr,
+            "[gencan-cpp-fallback-spg-post] line_inform=%d post_inform=%d nind=%d f_before=%.16e f_after=%.16e gpsupn=%.16e gpeucn2=%.16e\n",
+            spg_post_debug.line_inform,
+            spg_post_debug.post_inform,
+            spg_post_debug.nind,
+            spg_post_debug.f_before,
+            spg_post_debug.f_after,
+            spg_post_debug.gpsupn,
+            spg_post_debug.gpeucn2
+        );
+    }
+}
+
+void maybe_apply_fallback_seed_state_cpp(
+    const bool fallback_seed_state,
+    const bool fallback_x_seed_valid,
+    const int n_val,
+    const std::vector<double>& fallback_x_seed,
+    const char* fallback_x_seed_reason,
+    double* x
+) {
+    if (!fallback_seed_state || !fallback_x_seed_valid) {
+        return;
+    }
+    for (int i = 0; i < n_val; ++i) {
+        x[i] = fallback_x_seed[i];
+    }
+    if (gencan_debug_enabled()) {
+        std::fprintf(
+            stderr,
+            "[gencan-cpp-fallback-seed] reason=%s mode=%d\n",
+            fallback_x_seed_reason,
+            static_cast<int>(active_impl_mode())
+        );
+    }
+}
+
+void maybe_apply_fallback_gradient_seed_state_cpp(
+    const bool fallback_seed_state,
+    const bool fallback_g_seed_valid,
+    const int n_val,
+    const std::vector<double>& fallback_g_seed,
+    const char* fallback_g_seed_reason,
+    double* g
+) {
+    if (!fallback_seed_state || !fallback_g_seed_valid) {
+        return;
+    }
+    for (int i = 0; i < n_val; ++i) {
+        g[i] = fallback_g_seed[i];
+    }
+    if (gencan_debug_enabled()) {
+        std::fprintf(
+            stderr,
+            "[gencan-cpp-fallback-seed-g] reason=%s mode=%d\n",
+            fallback_g_seed_reason,
+            static_cast<int>(active_impl_mode())
+        );
+    }
+}
+
+void maybe_apply_fallback_f_seed_state_cpp(
+    const bool fallback_f_seed_state,
+    const bool fallback_f_seed_valid,
+    const double fallback_f_seed,
+    const char* fallback_f_seed_reason,
+    double* f
+) {
+    if (!fallback_f_seed_state || !fallback_f_seed_valid) {
+        return;
+    }
+    *f = fallback_f_seed;
+    if (gencan_debug_enabled()) {
+        std::fprintf(
+            stderr,
+            "[gencan-cpp-fallback-seed-f] reason=%s mode=%d f=%.16e\n",
+            fallback_f_seed_reason,
+            static_cast<int>(active_impl_mode()),
+            fallback_f_seed
+        );
+    }
+}
+
+bool packmolprecision_cpp(
+    const int* n,
+    double* x,
+    const int* m,
+    const double* lambda,
+    const double* rho,
+    int* eval_flag
+) {
+    double f_unused = 0.0;
+    packmol_evalal_fortran_c(n, x, m, lambda, rho, &f_unused, eval_flag);
+    if (*eval_flag < 0) {
+        return false;
+    }
+    return packmolprecision_from_state_cpp();
 }
 
 void calchddiff_cpp_reduced(
@@ -2196,17 +4853,10 @@ extern "C" void packmol_gencan_easy_bridge(
             return;
         case GencanImplMode::kCpp:
         case GencanImplMode::kAb:
-            if (use_easy_cpp_draft()) {
-                easygencan_cpp(
-                    n, x, l, u, m, lambda, rho, epsgpsn, maxit, maxfc, iprint, ncomp,
-                    f, g, gpsupn, iter, fcnt, gcnt, cgcnt, inform, wi, wd, delmin
-                );
-            } else {
-                packmol_easyg_fortran_c(
-                    n, x, l, u, m, lambda, rho, epsgpsn, maxit, maxfc, trtype, iprint,
-                    ncomp, f, g, gpsupn, iter, fcnt, gcnt, cgcnt, inform, wi, wd, delmin
-                );
-            }
+            easygencan_cpp(
+                n, x, l, u, m, lambda, rho, epsgpsn, maxit, maxfc, iprint, ncomp,
+                f, g, gpsupn, iter, fcnt, gcnt, cgcnt, inform, wi, wd, delmin
+            );
             return;
     }
 }
@@ -2304,10 +4954,142 @@ extern "C" void packmol_gencan_gencan_bridge(
         case GencanImplMode::kCpp:
         case GencanImplMode::kAb: {
             const int n_val = *n;
-            const char* fallback_reason = "cpp_nonterminal_continue";
+            // Legacy Fortran treats these as output counters; caller values are
+            // not part of the contract and may be uninitialized.
+            *iter = 0;
+            *fcnt = 0;
+            *gcnt = 0;
+            *cgcnt = 0;
+            *spgiter = 0;
+            *spgfcnt = 0;
+            *tniter = 0;
+            *tnfcnt = 0;
+            *tnstpcnt = 0;
+            *tnintcnt = 0;
+            *tnexgcnt = 0;
+            *tnexbcnt = 0;
+            *tnintfe = 0;
+            *tnexgfe = 0;
+            *tnexbfe = 0;
+            const char* fallback_reason = nullptr;
             std::vector<double> fallback_x_seed;
             bool fallback_x_seed_valid = false;
             const char* fallback_x_seed_reason = "";
+            std::vector<double> fallback_g_seed;
+            bool fallback_g_seed_valid = false;
+            const char* fallback_g_seed_reason = "";
+            double fallback_f_seed = 0.0;
+            bool fallback_f_seed_valid = false;
+            const char* fallback_f_seed_reason = "";
+            bool fallback_cg_schedule_seed_valid = false;
+            double fallback_cg_schedule_acgeps = 0.0;
+            double fallback_cg_schedule_bcgeps = 0.0;
+            double fallback_cg_schedule_gpeucn20 = 0.0;
+            double fallback_cg_schedule_gpsupn0 = 0.0;
+            bool gencan_cg_schedule_seed_valid = false;
+            double gencan_cg_schedule_acgeps = 0.0;
+            double gencan_cg_schedule_bcgeps = 0.0;
+            double gencan_cg_schedule_gpeucn20 = 0.0;
+            double gencan_cg_schedule_gpsupn0 = 0.0;
+            bool fallback_counter_seed_valid = false;
+            int fallback_iter_seed = 0;
+            int fallback_fcnt_seed = 0;
+            int fallback_gcnt_seed = 0;
+            int fallback_cgcnt_seed = 0;
+            int fallback_spgiter_seed = 0;
+            int fallback_spgfcnt_seed = 0;
+            int fallback_tniter_seed = 0;
+            int fallback_tnfcnt_seed = 0;
+            int fallback_tnstpcnt_seed = 0;
+            int fallback_tnintcnt_seed = 0;
+            int fallback_tnexgcnt_seed = 0;
+            int fallback_tnexbcnt_seed = 0;
+            int fallback_tnintfe_seed = 0;
+            int fallback_tnexgfe_seed = 0;
+            int fallback_tnexbfe_seed = 0;
+            bool fallback_step_seed_valid = false;
+            std::vector<double> fallback_s_seed;
+            std::vector<double> fallback_y_seed;
+            bool fallback_progress_seed_valid = false;
+            double fallback_progress_fprev = 0.0;
+            double fallback_progress_bestprog = 0.0;
+            int fallback_progress_itnfp = 0;
+
+            auto seed_fallback_state = [&](const char* reason, const std::vector<double>& x_seed,
+                                           const std::vector<double>* g_seed, const double f_seed) {
+                fallback_x_seed = x_seed;
+                fallback_x_seed_valid = true;
+                fallback_x_seed_reason = reason;
+                if (g_seed != nullptr) {
+                    fallback_g_seed = *g_seed;
+                    fallback_g_seed_valid = true;
+                    fallback_g_seed_reason = reason;
+                } else {
+                    fallback_g_seed.clear();
+                    fallback_g_seed_valid = false;
+                    fallback_g_seed_reason = "";
+                }
+                fallback_f_seed = f_seed;
+                fallback_f_seed_valid = true;
+                fallback_f_seed_reason = reason;
+            };
+
+            auto seed_fallback_counters = [&](const int iter_seed, const int fcnt_seed, const int gcnt_seed,
+                                              const int cgcnt_seed, const int spgiter_seed,
+                                              const int spgfcnt_seed, const int tniter_seed,
+                                              const int tnfcnt_seed, const int tnstpcnt_seed,
+                                              const int tnintcnt_seed, const int tnexgcnt_seed,
+                                              const int tnexbcnt_seed, const int tnintfe_seed,
+                                              const int tnexgfe_seed, const int tnexbfe_seed) {
+                fallback_counter_seed_valid = true;
+                fallback_iter_seed = iter_seed;
+                fallback_fcnt_seed = fcnt_seed;
+                fallback_gcnt_seed = gcnt_seed;
+                fallback_cgcnt_seed = cgcnt_seed;
+                fallback_spgiter_seed = spgiter_seed;
+                fallback_spgfcnt_seed = spgfcnt_seed;
+                fallback_tniter_seed = tniter_seed;
+                fallback_tnfcnt_seed = tnfcnt_seed;
+                fallback_tnstpcnt_seed = tnstpcnt_seed;
+                fallback_tnintcnt_seed = tnintcnt_seed;
+                fallback_tnexgcnt_seed = tnexgcnt_seed;
+                fallback_tnexbcnt_seed = tnexbcnt_seed;
+                fallback_tnintfe_seed = tnintfe_seed;
+                fallback_tnexgfe_seed = tnexgfe_seed;
+                fallback_tnexbfe_seed = tnexbfe_seed;
+            };
+
+            auto seed_fallback_steps = [&](const std::vector<double>& s_seed, const std::vector<double>& y_seed) {
+                fallback_step_seed_valid = true;
+                fallback_s_seed = s_seed;
+                fallback_y_seed = y_seed;
+            };
+
+            auto seed_fallback_zero_steps = [&]() {
+                fallback_step_seed_valid = true;
+                fallback_s_seed.assign(n_val, 0.0);
+                fallback_y_seed.assign(n_val, 0.0);
+            };
+
+            auto seed_fallback_progress = [&](const double progress_fprev_seed,
+                                              const double progress_bestprog_seed,
+                                              const int progress_itnfp_seed) {
+                fallback_progress_seed_valid = true;
+                fallback_progress_fprev = progress_fprev_seed;
+                fallback_progress_bestprog = progress_bestprog_seed;
+                fallback_progress_itnfp = progress_itnfp_seed;
+            };
+
+            auto seed_fallback_cg_schedule = [&](const bool valid, const double acgeps_seed,
+                                                 const double bcgeps_seed, const double gpeucn20_seed,
+                                                 const double gpsupn0_seed) {
+                fallback_cg_schedule_seed_valid = valid;
+                fallback_cg_schedule_acgeps = acgeps_seed;
+                fallback_cg_schedule_bcgeps = bcgeps_seed;
+                fallback_cg_schedule_gpeucn20 = gpeucn20_seed;
+                fallback_cg_schedule_gpsupn0 = gpsupn0_seed;
+            };
+
             bool tn_post_debug_captured = false;
             int tn_post_line_inform = 0;
             int tn_post_post_inform = -1;
@@ -2337,14 +5119,13 @@ extern "C" void packmol_gencan_gencan_bridge(
             double f_try = 0.0;
             packmol_evalal_fortran_c(n, x_try.data(), m, lambda, rho, &f_try, &eval_flag);
 
-            const bool precision_solution = packmolprecision_cpp(n, x_try.data(), m, lambda, rho);
-            if (precision_solution) {
+            if (eval_flag < 0) {
                 *f = f_try;
                 for (int i = 0; i < n_val; ++i) {
                     x[i] = x_try[i];
                 }
                 *iter = 0;
-                *fcnt = 0;
+                *fcnt = 1;
                 *gcnt = 0;
                 *cgcnt = 0;
                 *spgiter = 0;
@@ -2361,14 +5142,40 @@ extern "C" void packmol_gencan_gencan_bridge(
                 *inform = eval_flag;
                 return;
             }
-
-            if (eval_flag < 0) {
+            int precision_eval_flag = 0;
+            const bool precision_solution = packmolprecision_cpp(
+                n, x_try.data(), m, lambda, rho, &precision_eval_flag
+            );
+            if (precision_eval_flag < 0) {
                 *f = f_try;
                 for (int i = 0; i < n_val; ++i) {
                     x[i] = x_try[i];
                 }
                 *iter = 0;
                 *fcnt = 1;
+                *gcnt = 0;
+                *cgcnt = 0;
+                *spgiter = 0;
+                *spgfcnt = 0;
+                *tniter = 0;
+                *tnfcnt = 0;
+                *tnstpcnt = 0;
+                *tnintcnt = 0;
+                *tnexgcnt = 0;
+                *tnexbcnt = 0;
+                *tnintfe = 0;
+                *tnexgfe = 0;
+                *tnexbfe = 0;
+                *inform = precision_eval_flag;
+                return;
+            }
+            if (precision_solution) {
+                *f = f_try;
+                for (int i = 0; i < n_val; ++i) {
+                    x[i] = x_try[i];
+                }
+                *iter = 0;
+                *fcnt = 0;
                 *gcnt = 0;
                 *cgcnt = 0;
                 *spgiter = 0;
@@ -2433,6 +5240,17 @@ extern "C" void packmol_gencan_gencan_bridge(
                 }
 
                 const double epsgpen2 = (*epsgpen) * (*epsgpen);
+                gp_ieee_signal1_cpp(
+                    gpsupn_try,
+                    &gencan_cg_schedule_acgeps,
+                    &gencan_cg_schedule_bcgeps,
+                    *cgepsf,
+                    *cgepsi,
+                    *cggpnf
+                );
+                gencan_cg_schedule_gpeucn20 = gpeucn2_try;
+                gencan_cg_schedule_gpsupn0 = gpsupn_try;
+                gencan_cg_schedule_seed_valid = true;
                 int inform_try = -1;
                 if (gpeucn2_try <= epsgpen2) {
                     inform_try = 0;
@@ -2498,6 +5316,10 @@ extern "C" void packmol_gencan_gencan_bridge(
                         *inform = inform_try;
                         return;
                     }
+
+                double progress_fprev = f_try;
+                double progress_bestprog = std::max((*infabs) - f_try, 0.0);
+                int progress_itnfp = 0;
 
                 const double ometa2 = (1.0 - *eta) * (1.0 - *eta);
                 if (gpeucn2_try > 0.0 && gieucn2_try <= ometa2 * gpeucn2_try) {
@@ -2660,7 +5482,34 @@ extern "C" void packmol_gencan_gencan_bridge(
                         return;
                     }
 
-                    const bool precision_after_spg = packmolprecision_cpp(n, x_work.data(), m, lambda, rho);
+                    int precision_after_spg_flag = 0;
+                    const bool precision_after_spg = packmolprecision_cpp(
+                        n, x_work.data(), m, lambda, rho, &precision_after_spg_flag
+                    );
+                    if (precision_after_spg_flag < 0) {
+                        *f = f_work;
+                        for (int i = 0; i < n_val; ++i) {
+                            x[i] = x_work[i];
+                            g[i] = g_work[i];
+                        }
+                        *iter = iter_work;
+                        *fcnt = fcnt_work;
+                        *gcnt = gcnt_work;
+                        *cgcnt = cgcnt_work;
+                        *spgiter = spgiter_work;
+                        *spgfcnt = spgfcnt_work;
+                        *tniter = tniter_work;
+                        *tnfcnt = tnfcnt_work;
+                        *tnstpcnt = tnstpcnt_work;
+                        *tnintcnt = tnintcnt_work;
+                        *tnexgcnt = tnexgcnt_work;
+                        *tnexbcnt = tnexbcnt_work;
+                        *tnintfe = tnintfe_work;
+                        *tnexgfe = tnexgfe_work;
+                        *tnexbfe = tnexbfe_work;
+                        *inform = precision_after_spg_flag;
+                        return;
+                    }
                     int post_inform = evaluate_post_step_inform_cpp(
                         precision_after_spg,
                         ls_inform,
@@ -2679,7 +5528,10 @@ extern "C" void packmol_gencan_gencan_bridge(
                         iter_work,
                         *maxit,
                         fcnt_work,
-                        *maxfc
+                        *maxfc,
+                        &progress_fprev,
+                        &progress_bestprog,
+                        &progress_itnfp
                     );
 
                     int retry_budget = spg_post_retry_steps();
@@ -2777,7 +5629,34 @@ extern "C" void packmol_gencan_gencan_bridge(
                             }
                         }
 
-                        const bool precision_after_retry = packmolprecision_cpp(n, x_work.data(), m, lambda, rho);
+                        int precision_after_retry_flag = 0;
+                        const bool precision_after_retry = packmolprecision_cpp(
+                            n, x_work.data(), m, lambda, rho, &precision_after_retry_flag
+                        );
+                        if (precision_after_retry_flag < 0) {
+                            *f = f_work;
+                            for (int i = 0; i < n_val; ++i) {
+                                x[i] = x_work[i];
+                                g[i] = g_work[i];
+                            }
+                            *iter = iter_work;
+                            *fcnt = fcnt_work;
+                            *gcnt = gcnt_work;
+                            *cgcnt = cgcnt_work;
+                            *spgiter = spgiter_work;
+                            *spgfcnt = spgfcnt_work;
+                            *tniter = tniter_work;
+                            *tnfcnt = tnfcnt_work;
+                            *tnstpcnt = tnstpcnt_work;
+                            *tnintcnt = tnintcnt_work;
+                            *tnexgcnt = tnexgcnt_work;
+                            *tnexbcnt = tnexbcnt_work;
+                            *tnintfe = tnintfe_work;
+                            *tnexgfe = tnexgfe_work;
+                            *tnexbfe = tnexbfe_work;
+                            *inform = precision_after_retry_flag;
+                            return;
+                        }
                         ls_inform = spg_line_inform;
                         post_inform = evaluate_post_step_inform_cpp(
                             precision_after_retry,
@@ -2797,7 +5676,10 @@ extern "C" void packmol_gencan_gencan_bridge(
                             iter_work,
                             *maxit,
                             fcnt_work,
-                            *maxfc
+                            *maxfc,
+                            &progress_fprev,
+                            &progress_bestprog,
+                            &progress_itnfp
                         );
 
                         if (gencan_debug_enabled()) {
@@ -2858,10 +5740,142 @@ extern "C" void packmol_gencan_gencan_bridge(
                         *inform = post_inform;
                         return;
                     }
+                    if (!spg_post_handoff_enabled()) {
+                        *f = f_work;
+                        for (int i = 0; i < n_val; ++i) {
+                            x[i] = x_work[i];
+                            g[i] = g_work[i];
+                            s[i] = s_work[i];
+                            y[i] = y_work[i];
+                            d[i] = d_work[i];
+                        }
+                        for (int i = 0; i < nind_after; ++i) {
+                            ind[i] = ind_work[i];
+                        }
+                        *gpeucn2 = gpeucn2_after;
+                        *gpsupn = gpsupn_after;
+                        *iter = iter_work;
+                        *fcnt = fcnt_work;
+                        *gcnt = gcnt_work;
+                        *cgcnt = cgcnt_work;
+                        *spgiter = spgiter_work;
+                        *spgfcnt = spgfcnt_work;
+                        *tniter = tniter_work;
+                        *tnfcnt = tnfcnt_work;
+                        *tnstpcnt = tnstpcnt_work;
+                        *tnintcnt = tnintcnt_work;
+                        *tnexgcnt = tnexgcnt_work;
+                        *tnexbcnt = tnexbcnt_work;
+                        *tnintfe = tnintfe_work;
+                        *tnexgfe = tnexgfe_work;
+                        *tnexbfe = tnexbfe_work;
+                        if (*maxitngp > 0) {
+                            lastgpns[iter_work % (*maxitngp)] = gpeucn2_after;
+                        }
+
+                        if (gencan_debug_enabled()) {
+                            std::fprintf(
+                                stderr,
+                                "[gencan-cpp-spg-post-direct-tail] mode=%d iter=%d fcnt=%d gcnt=%d\n",
+                                static_cast<int>(active_impl_mode()),
+                                *iter,
+                                *fcnt,
+                                *gcnt
+                            );
+                        }
+
+                        continue_spg_post_nonterminal_cpp(
+                            n_val,
+                            n,
+                            x,
+                            l,
+                            u,
+                            m,
+                            lambda,
+                            rho,
+                            epsgpen,
+                            epsgpsn,
+                            maxitnfp,
+                            epsnfp,
+                            maxitngp,
+                            fmin,
+                            maxit,
+                            maxfc,
+                            udelta0,
+                            ucgmaxit,
+                            cgscre,
+                            cggpnf,
+                            cgepsi,
+                            cgepsf,
+                            epsnqmp,
+                            maxitnqmp,
+                            nearlyq,
+                            nint,
+                            next,
+                            mininterp,
+                            maxextrap,
+                            gtype,
+                            htvtype,
+                            trtype,
+                            iprint,
+                            ncomp,
+                            f,
+                            g,
+                            gpeucn2,
+                            gpsupn,
+                            iter,
+                            fcnt,
+                            gcnt,
+                            cgcnt,
+                            spgiter,
+                            spgfcnt,
+                            tniter,
+                            tnfcnt,
+                            tnstpcnt,
+                            tnintcnt,
+                            tnexgcnt,
+                            tnexbcnt,
+                            tnintfe,
+                            tnexgfe,
+                            tnexbfe,
+                            inform,
+                            s,
+                            y,
+                            d,
+                            ind,
+                            lastgpns,
+                            w,
+                            eta,
+                            delmin,
+                            lspgma,
+                            lspgmi,
+                            theta,
+                            gamma,
+                            beta,
+                            sigma1,
+                            sigma2,
+                            sterel,
+                            steabs,
+                            epsrel,
+                            epsabs,
+                            infrel,
+                            infabs,
+                            progress_fprev,
+                            progress_bestprog,
+                            progress_itnfp
+                        );
+                        return;
+                    }
+
                     fallback_reason = "spg_post_nonterminal";
-                    fallback_x_seed = x_work;
-                    fallback_x_seed_valid = true;
-                    fallback_x_seed_reason = "spg_post_nonterminal";
+                    seed_fallback_state("spg_post_nonterminal", x_work, &g_work, f_work);
+                    seed_fallback_counters(
+                        iter_work, fcnt_work, gcnt_work, cgcnt_work, spgiter_work, spgfcnt_work,
+                        tniter_work, tnfcnt_work, tnstpcnt_work, tnintcnt_work, tnexgcnt_work,
+                        tnexbcnt_work, tnintfe_work, tnexgfe_work, tnexbfe_work
+                    );
+                    seed_fallback_steps(s_work, y_work);
+                    seed_fallback_progress(progress_fprev, progress_bestprog, progress_itnfp);
                 } else {
                     std::vector<double> x_work = x_try;
                     std::vector<double> g_work = g_try;
@@ -2894,6 +5908,21 @@ extern "C" void packmol_gencan_gencan_bridge(
                         int tnintfe_work = 0;
                         int tnexgfe_work = 0;
                         int tnexbfe_work = 0;
+                        const int pre_tn_iter_seed = iter_work;
+                        const int pre_tn_fcnt_seed = fcnt_work;
+                        const int pre_tn_gcnt_seed = gcnt_work;
+                        const int pre_tn_cgcnt_seed = cgcnt_work;
+                        const int pre_tn_spgiter_seed = spgiter_work;
+                        const int pre_tn_spgfcnt_seed = spgfcnt_work;
+                        const int pre_tn_tniter_seed = tniter_work;
+                        const int pre_tn_tnfcnt_seed = tnfcnt_work;
+                        const int pre_tn_tnstpcnt_seed = tnstpcnt_work;
+                        const int pre_tn_tnintcnt_seed = tnintcnt_work;
+                        const int pre_tn_tnexgcnt_seed = tnexgcnt_work;
+                        const int pre_tn_tnexbcnt_seed = tnexbcnt_work;
+                        const int pre_tn_tnintfe_seed = tnintfe_work;
+                        const int pre_tn_tnexgfe_seed = tnexgfe_work;
+                        const int pre_tn_tnexbfe_seed = tnexbfe_work;
 
                         const double xnorm_try = std::sqrt(norm2_kernel(n_val, x_try.data()));
                         double delta = 0.0;
@@ -2903,15 +5932,23 @@ extern "C" void packmol_gencan_gencan_bridge(
                             delta = *udelta0;
                         }
 
+                        const double epsgpen2 = (*epsgpen) * (*epsgpen);
                         double acgeps = 0.0;
                         double bcgeps = 0.0;
-                        gp_ieee_signal1_cpp(
-                            gpsupn_try, &acgeps, &bcgeps, *cgepsf, *cgepsi, *cggpnf
-                        );
-
-                        const double epsgpen2 = (*epsgpen) * (*epsgpen);
-                        const double gpeucn20 = gpeucn2_try;
-                        const double gpsupn0 = gpsupn_try;
+                        if (gencan_cg_schedule_seed_valid) {
+                            acgeps = gencan_cg_schedule_acgeps;
+                            bcgeps = gencan_cg_schedule_bcgeps;
+                        } else {
+                            gp_ieee_signal1_cpp(
+                                gpsupn_try, &acgeps, &bcgeps, *cgepsf, *cgepsi, *cggpnf
+                            );
+                        }
+                        const double gpeucn20 = gencan_cg_schedule_seed_valid
+                            ? gencan_cg_schedule_gpeucn20
+                            : gpeucn2_try;
+                        const double gpsupn0 = gencan_cg_schedule_seed_valid
+                            ? gencan_cg_schedule_gpsupn0
+                            : gpsupn_try;
                         double kappa = 0.0;
                         double cgeps = *cgepsf;
                         int cgmaxit = 0;
@@ -3140,7 +6177,37 @@ extern "C" void packmol_gencan_gencan_bridge(
                                     gpeucn2_after += gpi * gpi;
                                 }
 
-                                const bool precision_after = packmolprecision_cpp(n, x_work.data(), m, lambda, rho);
+                                int precision_after_flag = 0;
+                                const bool precision_after = packmolprecision_cpp(
+                                    n, x_work.data(), m, lambda, rho, &precision_after_flag
+                                );
+                                if (precision_after_flag < 0) {
+                                    *f = f_work;
+                                    for (int i = 0; i < n_val; ++i) {
+                                        x[i] = x_work[i];
+                                        g[i] = g_work[i];
+                                    }
+                                    *iter = iter_work;
+                                    *fcnt = fcnt_work;
+                                    *gcnt = gcnt_work;
+                                    *cgcnt = cgcnt_work;
+                                    *spgiter = spgiter_work;
+                                    *spgfcnt = spgfcnt_work;
+                                    *tniter = tniter_work;
+                                    *tnfcnt = tnfcnt_work;
+                                    *tnstpcnt = tnstpcnt_work;
+                                    *tnintcnt = tnintcnt_work;
+                                    *tnexgcnt = tnexgcnt_work;
+                                    *tnexbcnt = tnexbcnt_work;
+                                    *tnintfe = tnintfe_work;
+                                    *tnexgfe = tnexgfe_work;
+                                    *tnexbfe = tnexbfe_work;
+                                    *inform = precision_after_flag;
+                                    return;
+                                }
+                                const double pre_tn_progress_fprev = progress_fprev;
+                                const double pre_tn_progress_bestprog = progress_bestprog;
+                                const int pre_tn_progress_itnfp = progress_itnfp;
                                 int post_inform = evaluate_post_step_inform_cpp(
                                     precision_after,
                                     line_inform,
@@ -3159,7 +6226,10 @@ extern "C" void packmol_gencan_gencan_bridge(
                                     iter_work,
                                     *maxit,
                                     fcnt_work,
-                                    *maxfc
+                                    *maxfc,
+                                    &progress_fprev,
+                                    &progress_bestprog,
+                                    &progress_itnfp
                                 );
 
                                 int retry_budget = tn_post_retry_spg_steps();
@@ -3251,7 +6321,34 @@ extern "C" void packmol_gencan_gencan_bridge(
                                         gpeucn2_after += gpi * gpi;
                                     }
 
-                                    const bool precision_after_retry = packmolprecision_cpp(n, x_work.data(), m, lambda, rho);
+                                    int precision_after_retry_flag = 0;
+                                    const bool precision_after_retry = packmolprecision_cpp(
+                                        n, x_work.data(), m, lambda, rho, &precision_after_retry_flag
+                                    );
+                                    if (precision_after_retry_flag < 0) {
+                                        *f = f_work;
+                                        for (int i = 0; i < n_val; ++i) {
+                                            x[i] = x_work[i];
+                                            g[i] = g_work[i];
+                                        }
+                                        *iter = iter_work;
+                                        *fcnt = fcnt_work;
+                                        *gcnt = gcnt_work;
+                                        *cgcnt = cgcnt_work;
+                                        *spgiter = spgiter_work;
+                                        *spgfcnt = spgfcnt_work;
+                                        *tniter = tniter_work;
+                                        *tnfcnt = tnfcnt_work;
+                                        *tnstpcnt = tnstpcnt_work;
+                                        *tnintcnt = tnintcnt_work;
+                                        *tnexgcnt = tnexgcnt_work;
+                                        *tnexbcnt = tnexbcnt_work;
+                                        *tnintfe = tnintfe_work;
+                                        *tnexgfe = tnexgfe_work;
+                                        *tnexbfe = tnexbfe_work;
+                                        *inform = precision_after_retry_flag;
+                                        return;
+                                    }
                                     post_inform = evaluate_post_step_inform_cpp(
                                         precision_after_retry,
                                         spg_line_inform,
@@ -3270,7 +6367,10 @@ extern "C" void packmol_gencan_gencan_bridge(
                                         iter_work,
                                         *maxit,
                                         fcnt_work,
-                                        *maxfc
+                                        *maxfc,
+                                        &progress_fprev,
+                                        &progress_bestprog,
+                                        &progress_itnfp
                                     );
 
                                     if (gencan_debug_enabled()) {
@@ -3336,121 +6436,265 @@ extern "C" void packmol_gencan_gencan_bridge(
                                     return;
                                 }
                                 fallback_reason = "tn_post_nonterminal";
-                                fallback_x_seed = x_work;
-                                fallback_x_seed_valid = true;
-                                fallback_x_seed_reason = "tn_post_nonterminal";
+                                const bool nested_tn_replay_seed =
+                                    g_spg_post_cpp_replay_depth > 0 &&
+                                    g_tn_post_cpp_replay_depth < tn_post_cpp_replay_max_depth();
+                                const std::vector<double>& tn_x_seed = nested_tn_replay_seed ? x_try : x_work;
+                                const std::vector<double>& tn_g_seed = nested_tn_replay_seed ? g_try : g_work;
+                                seed_fallback_state(
+                                    "tn_post_nonterminal",
+                                    tn_x_seed,
+                                    &tn_g_seed,
+                                    nested_tn_replay_seed ? f_try : f_work
+                                );
+                                seed_fallback_cg_schedule(
+                                    gencan_cg_schedule_seed_valid,
+                                    gencan_cg_schedule_seed_valid ? gencan_cg_schedule_acgeps : acgeps,
+                                    gencan_cg_schedule_seed_valid ? gencan_cg_schedule_bcgeps : bcgeps,
+                                    gencan_cg_schedule_seed_valid ? gencan_cg_schedule_gpeucn20 : gpeucn20,
+                                    gencan_cg_schedule_seed_valid ? gencan_cg_schedule_gpsupn0 : gpsupn0
+                                );
+                                seed_fallback_counters(
+                                    nested_tn_replay_seed ? pre_tn_iter_seed : iter_work,
+                                    nested_tn_replay_seed ? pre_tn_fcnt_seed : fcnt_work,
+                                    nested_tn_replay_seed ? pre_tn_gcnt_seed : gcnt_work,
+                                    nested_tn_replay_seed ? pre_tn_cgcnt_seed : cgcnt_work,
+                                    nested_tn_replay_seed ? pre_tn_spgiter_seed : spgiter_work,
+                                    nested_tn_replay_seed ? pre_tn_spgfcnt_seed : spgfcnt_work,
+                                    nested_tn_replay_seed ? pre_tn_tniter_seed : tniter_work,
+                                    nested_tn_replay_seed ? pre_tn_tnfcnt_seed : tnfcnt_work,
+                                    nested_tn_replay_seed ? pre_tn_tnstpcnt_seed : tnstpcnt_work,
+                                    nested_tn_replay_seed ? pre_tn_tnintcnt_seed : tnintcnt_work,
+                                    nested_tn_replay_seed ? pre_tn_tnexgcnt_seed : tnexgcnt_work,
+                                    nested_tn_replay_seed ? pre_tn_tnexbcnt_seed : tnexbcnt_work,
+                                    nested_tn_replay_seed ? pre_tn_tnintfe_seed : tnintfe_work,
+                                    nested_tn_replay_seed ? pre_tn_tnexgfe_seed : tnexgfe_work,
+                                    nested_tn_replay_seed ? pre_tn_tnexbfe_seed : tnexbfe_work
+                                );
+                                seed_fallback_zero_steps();
+                                if (!nested_tn_replay_seed) {
+                                    for (int i = 0; i < n_val; ++i) {
+                                        fallback_s_seed[i] = x_work[i] - x_try[i];
+                                        fallback_y_seed[i] = g_work[i] - g_try[i];
+                                    }
+                                }
+                                seed_fallback_progress(
+                                    nested_tn_replay_seed ? pre_tn_progress_fprev : progress_fprev,
+                                    nested_tn_replay_seed ? pre_tn_progress_bestprog : progress_bestprog,
+                                    nested_tn_replay_seed ? pre_tn_progress_itnfp : progress_itnfp
+                                );
                             }
                         }
                     } else {
                         fallback_reason = "tn_no_free_variables";
+                        seed_fallback_state("tn_no_free_variables", x_try, &g_try, f_try);
+                        seed_fallback_counters(
+                            *iter, *fcnt, *gcnt, *cgcnt, *spgiter, *spgfcnt, *tniter, *tnfcnt,
+                            *tnstpcnt, *tnintcnt, *tnexgcnt, *tnexbcnt, *tnintfe, *tnexgfe, *tnexbfe
+                        );
+                        seed_fallback_zero_steps();
+                        seed_fallback_progress(progress_fprev, progress_bestprog, progress_itnfp);
                     }
                 }
             }
 
-            if (gencan_debug_enabled()) {
-                std::fprintf(
-                    stderr,
-                    "[gencan-cpp-fallback] reason=%s mode=%d\n",
-                    fallback_reason,
-                    static_cast<int>(active_impl_mode())
-                );
-                if (std::string(fallback_reason) == "tn_post_nonterminal" && tn_post_debug_captured) {
-                    std::fprintf(
-                        stderr,
-                        "[gencan-cpp-fallback-tn-post] line_inform=%d post_inform=%d nind=%d f_before=%.16e f_after=%.16e gpsupn=%.16e gpeucn2=%.16e\n",
-                        tn_post_line_inform,
-                        tn_post_post_inform,
-                        tn_post_nind,
-                        tn_post_f_before,
-                        tn_post_f_after,
-                        tn_post_gpsupn,
-                        tn_post_gpeucn2
-                    );
-                }
-                if (std::string(fallback_reason) == "spg_post_nonterminal" && spg_post_debug_captured) {
-                    std::fprintf(
-                        stderr,
-                        "[gencan-cpp-fallback-spg-post] line_inform=%d post_inform=%d nind=%d f_before=%.16e f_after=%.16e gpsupn=%.16e gpeucn2=%.16e\n",
-                        spg_post_line_inform,
-                        spg_post_post_inform,
-                        spg_post_nind,
-                        spg_post_f_before,
-                        spg_post_f_after,
-                        spg_post_gpsupn,
-                        spg_post_gpeucn2
-                    );
-                }
-            }
-            if (fallback_seed_state_enabled() && fallback_x_seed_valid) {
-                for (int i = 0; i < n_val; ++i) {
-                    x[i] = fallback_x_seed[i];
-                }
+            if (fallback_reason == nullptr) {
                 if (gencan_debug_enabled()) {
                     std::fprintf(
                         stderr,
-                        "[gencan-cpp-fallback-seed] reason=%s mode=%d\n",
-                        fallback_x_seed_reason,
+                        "[gencan-cpp-missing-tail-reason] mode=%d\n",
                         static_cast<int>(active_impl_mode())
                     );
                 }
+                *inform = 6;
+                return;
             }
-            const bool tn_shadow =
-                tn_post_shadow_enabled() && std::string(fallback_reason) == "tn_post_nonterminal";
-            std::vector<double> x_before;
-            std::vector<double> g_before;
-            double f_before = 0.0;
-            int inform_before = 0;
-            int iter_before = 0;
-            int fcnt_before = 0;
-            int gcnt_before = 0;
-            int cgcnt_before = 0;
-            int spgiter_before = 0;
-            int tniter_before = 0;
-            if (tn_shadow) {
-                x_before.assign(x, x + n_val);
-                g_before.assign(g, g + n_val);
-                f_before = *f;
-                inform_before = *inform;
-                iter_before = *iter;
-                fcnt_before = *fcnt;
-                gcnt_before = *gcnt;
-                cgcnt_before = *cgcnt;
-                spgiter_before = *spgiter;
-                tniter_before = *tniter;
-            }
-            packmol_gencan_fortran_c(
-                n, x, l, u, m, lambda, rho, epsgpen, epsgpsn, maxitnfp, epsnfp,
-                maxitngp, fmin, maxit, maxfc, udelta0, ucgmaxit, cgscre, cggpnf,
-                cgepsi, cgepsf, epsnqmp, maxitnqmp, nearlyq, nint, next, mininterp,
-                maxextrap, gtype, htvtype, trtype, iprint, ncomp, f, g, gpeucn2,
-                gpsupn, iter, fcnt, gcnt, cgcnt, spgiter, spgfcnt, tniter, tnfcnt,
-                tnstpcnt, tnintcnt, tnexgcnt, tnexbcnt, tnintfe, tnexgfe, tnexbfe,
-                inform, s, y, d, ind, lastgpns, w, eta, delmin, lspgma, lspgmi,
-                theta, gamma, beta, sigma1, sigma2, sterel, steabs, epsrel, epsabs,
-                infrel, infabs
+
+            const TailFallbackPolicy tail_policy = make_tail_fallback_policy(fallback_reason);
+            const FallbackPostDebugInfo tn_post_debug{
+                tn_post_debug_captured,
+                tn_post_line_inform,
+                tn_post_post_inform,
+                tn_post_nind,
+                tn_post_f_before,
+                tn_post_f_after,
+                tn_post_gpsupn,
+                tn_post_gpeucn2
+            };
+            const FallbackPostDebugInfo spg_post_debug{
+                spg_post_debug_captured,
+                spg_post_line_inform,
+                spg_post_post_inform,
+                spg_post_nind,
+                spg_post_f_before,
+                spg_post_f_after,
+                spg_post_gpsupn,
+                spg_post_gpeucn2
+            };
+            emit_fallback_debug_cpp(tail_policy, fallback_reason, tn_post_debug, spg_post_debug);
+            const bool force_blocked_seed_state = tail_policy.effective_block_tail;
+            maybe_apply_fallback_seed_state_cpp(
+                fallback_seed_state_enabled() || force_blocked_seed_state,
+                fallback_x_seed_valid,
+                n_val,
+                fallback_x_seed,
+                fallback_x_seed_reason,
+                x
             );
-            if (tn_shadow) {
-                double max_abs_dx = 0.0;
-                double max_abs_dg = 0.0;
+            maybe_apply_fallback_gradient_seed_state_cpp(
+                fallback_seed_state_enabled() || force_blocked_seed_state,
+                fallback_g_seed_valid,
+                n_val,
+                fallback_g_seed,
+                fallback_g_seed_reason,
+                g
+            );
+            maybe_apply_fallback_f_seed_state_cpp(
+                force_blocked_seed_state,
+                fallback_f_seed_valid,
+                fallback_f_seed,
+                fallback_f_seed_reason,
+                f
+            );
+            if (tail_policy.effective_block_tail && fallback_counter_seed_valid) {
+                *iter = fallback_iter_seed;
+                *fcnt = fallback_fcnt_seed;
+                *gcnt = fallback_gcnt_seed;
+                *cgcnt = fallback_cgcnt_seed;
+                *spgiter = fallback_spgiter_seed;
+                *spgfcnt = fallback_spgfcnt_seed;
+                *tniter = fallback_tniter_seed;
+                *tnfcnt = fallback_tnfcnt_seed;
+                *tnstpcnt = fallback_tnstpcnt_seed;
+                *tnintcnt = fallback_tnintcnt_seed;
+                *tnexgcnt = fallback_tnexgcnt_seed;
+                *tnexbcnt = fallback_tnexbcnt_seed;
+                *tnintfe = fallback_tnintfe_seed;
+                *tnexgfe = fallback_tnexgfe_seed;
+                *tnexbfe = fallback_tnexbfe_seed;
+            }
+            if (tail_policy.effective_block_tail && fallback_step_seed_valid) {
                 for (int i = 0; i < n_val; ++i) {
-                    max_abs_dx = std::max(max_abs_dx, std::abs(x[i] - x_before[i]));
-                    max_abs_dg = std::max(max_abs_dg, std::abs(g[i] - g_before[i]));
+                    s[i] = (i < static_cast<int>(fallback_s_seed.size())) ? fallback_s_seed[i] : 0.0;
+                    y[i] = (i < static_cast<int>(fallback_y_seed.size())) ? fallback_y_seed[i] : 0.0;
                 }
+            }
+            const TnShadowSnapshot tn_shadow = capture_tn_shadow_snapshot_cpp(
+                tn_post_shadow_enabled() && std::string(fallback_reason) == "tn_post_nonterminal",
+                n_val,
+                x,
+                g,
+                f,
+                inform,
+                iter,
+                fcnt,
+                gcnt,
+                cgcnt,
+                spgiter,
+                tniter
+            );
+            const std::string reason(fallback_reason);
+            if (reason == "spg_post_nonterminal") {
+                continue_spg_post_nonterminal_cpp(
+                    n_val,
+                    n,
+                    x,
+                    l,
+                    u,
+                    m,
+                    lambda,
+                    rho,
+                    epsgpen,
+                    epsgpsn,
+                    maxitnfp,
+                    epsnfp,
+                    maxitngp,
+                    fmin,
+                    maxit,
+                    maxfc,
+                    udelta0,
+                    ucgmaxit,
+                    cgscre,
+                    cggpnf,
+                    cgepsi,
+                    cgepsf,
+                    epsnqmp,
+                    maxitnqmp,
+                    nearlyq,
+                    nint,
+                    next,
+                    mininterp,
+                    maxextrap,
+                    gtype,
+                    htvtype,
+                    trtype,
+                    iprint,
+                    ncomp,
+                    f,
+                    g,
+                    gpeucn2,
+                    gpsupn,
+                    iter,
+                    fcnt,
+                    gcnt,
+                    cgcnt,
+                    spgiter,
+                    spgfcnt,
+                    tniter,
+                    tnfcnt,
+                    tnstpcnt,
+                    tnintcnt,
+                    tnexgcnt,
+                    tnexbcnt,
+                    tnintfe,
+                    tnexgfe,
+                    tnexbfe,
+                    inform,
+                    s,
+                    y,
+                    d,
+                    ind,
+                    lastgpns,
+                    w,
+                    eta,
+                    delmin,
+                    lspgma,
+                    lspgmi,
+                    theta,
+                    gamma,
+                    beta,
+                    sigma1,
+                    sigma2,
+                    sterel,
+                    steabs,
+                    epsrel,
+                    epsabs,
+                    infrel,
+                    infabs,
+                    fallback_progress_fprev,
+                    fallback_progress_bestprog,
+                    fallback_progress_itnfp
+                );
+            } else if (is_tn_tail_reason_cpp(reason)) {
+                continue_tn_tail_reason_cpp(
+                    fallback_reason, n_val, tn_shadow,
+                    fallback_progress_seed_valid, fallback_progress_fprev, fallback_progress_bestprog,
+                    fallback_progress_itnfp, fallback_cg_schedule_seed_valid, fallback_cg_schedule_acgeps,
+                    fallback_cg_schedule_bcgeps, fallback_cg_schedule_gpeucn20, fallback_cg_schedule_gpsupn0,
+                    n, x, l, u, m, lambda, rho,
+                    epsgpen, epsgpsn, maxitnfp, epsnfp, maxitngp, fmin, maxit, maxfc, udelta0,
+                    ucgmaxit, cgscre, cggpnf, cgepsi, cgepsf, epsnqmp, maxitnqmp, nearlyq, nint,
+                    next, mininterp, maxextrap, gtype, htvtype, trtype, iprint, ncomp, f, g,
+                    gpeucn2, gpsupn, iter, fcnt, gcnt, cgcnt, spgiter, spgfcnt, tniter, tnfcnt,
+                    tnstpcnt, tnintcnt, tnexgcnt, tnexbcnt, tnintfe, tnexgfe, tnexbfe, inform, s,
+                    y, d, ind, lastgpns, w, eta, delmin, lspgma, lspgmi, theta, gamma, beta, sigma1,
+                    sigma2, sterel, steabs, epsrel, epsabs, infrel, infabs
+                );
+            } else {
                 std::fprintf(
                     stderr,
-                    "[gencan-tn-post-shadow] mode=%d inform:%d->%d iter:+%d fcnt:+%d gcnt:+%d cgcnt:+%d spgiter:+%d tniter:+%d df=%.16e max|dx|=%.16e max|dg|=%.16e\n",
-                    static_cast<int>(active_impl_mode()),
-                    inform_before,
-                    *inform,
-                    *iter - iter_before,
-                    *fcnt - fcnt_before,
-                    *gcnt - gcnt_before,
-                    *cgcnt - cgcnt_before,
-                    *spgiter - spgiter_before,
-                    *tniter - tniter_before,
-                    *f - f_before,
-                    max_abs_dx,
-                    max_abs_dg
+                    "[gencan-cpp-missing-tail-reason] mode=%d\n",
+                    static_cast<int>(active_impl_mode())
                 );
             }
             return;
