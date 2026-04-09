@@ -22,16 +22,6 @@ PROBES = (
     "test_gencan_spg_post_ab_probe",
 )
 
-AB_COMPARE_PROBES = {
-    "test_gencan_ab_probe",
-    "test_gencan_entry_stop_ab_probe",
-    "test_gencan_entry_stop_gtype2_ab_probe",
-    "test_gencan_entry_stop_inform2_ab_probe",
-    "test_gencan_entry_stop_inform3_ab_probe",
-    "test_gencan_runtime_driver_probe",
-    "test_gencan_spg_post_ab_probe",
-}
-
 STRICT_COUNTER_PROBES = {
     "test_gencan_ab_probe",
     "test_gencan_entry_stop_ab_probe",
@@ -85,13 +75,6 @@ def _run_probe(
     env.update({
         "PACKMOL_GENCAN_IMPL": impl_mode,
         "PACKMOL_GENCAN_NUMERIC_CPP": "0",
-        "PACKMOL_GENCAN_TN_POST_CPP_HANDOFF": "1",
-        "PACKMOL_GENCAN_TN_POST_CPP_HANDOFF_SAFE": "1",
-        "PACKMOL_GENCAN_TN_POST_CPP_HANDOFF_UNSAFE": "0",
-        "PACKMOL_GENCAN_TN_POST_CPP_HANDOFF_MAX_DEPTH": "1",
-        "PACKMOL_GENCAN_TN_POST_CPP_HANDOFF_CANONICALIZE": "1",
-        "PACKMOL_GENCAN_TN_POST_CPP_HANDOFF_CPP_REPLAY": "1",
-        "PACKMOL_GENCAN_DEBUG": "1",
     })
     completed = subprocess.run(
         [str(probe), str(staged_input)],
@@ -302,12 +285,12 @@ def main() -> int:
                 raise RuntimeError(f"{probe_name}: unexpected blocked-fallback marker")
             if "[gencan-cpp-missing-tail-reason]" in output:
                 raise RuntimeError(f"{probe_name}: missing tail reason marker")
+            if "[gencan-cpp-tail-compat-unexpected]" in output:
+                raise RuntimeError(f"{probe_name}: unexpected compat-tail marker")
             if "[gencan-cpp-fortran-tail]" in output:
                 raise RuntimeError(f"{probe_name}: stale fortran-tail marker observed")
-            if "[gencan-cpp-handoff-canonicalize-fortran]" in output:
-                raise RuntimeError(f"{probe_name}: unexpected fortran canonicalize marker")
             cpp_summary = _assert_summary_sane(probe_name, output)
-            if ab_compare_enabled and probe_name in AB_COMPARE_PROBES:
+            if ab_compare_enabled:
                 fortran_output = _run_probe(
                     probe_dir / probe_name,
                     staged_input,

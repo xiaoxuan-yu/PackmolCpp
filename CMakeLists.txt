@@ -70,6 +70,8 @@ set(PACKMOL_CORE_SOURCES
 
 add_library(packmol_gencan_cpp_obj OBJECT
     src/cpp/gencan/bridge.cpp
+    src/cpp/gencan/gencan_post.cpp
+    src/cpp/gencan/gencan_eval.cpp
 )
 target_compile_features(packmol_gencan_cpp_obj PUBLIC cxx_std_17)
 target_include_directories(packmol_gencan_cpp_obj PUBLIC

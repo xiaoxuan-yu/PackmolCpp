@@ -41,13 +41,6 @@ def main() -> int:
                 "PACKMOL_GENCAN_IMPL": "cpp",
                 "PACKMOL_GENCAN_NUMERIC_CPP": "0",
                 "PACKMOL_GENCAN_DEBUG": "1",
-                "PACKMOL_GENCAN_TN_POST_CPP_HANDOFF": "1",
-                "PACKMOL_GENCAN_TN_POST_CPP_HANDOFF_SAFE": "1",
-                "PACKMOL_GENCAN_TN_POST_CPP_HANDOFF_UNSAFE": "0",
-                "PACKMOL_GENCAN_TN_POST_CPP_HANDOFF_MAX_DEPTH": "1",
-                "PACKMOL_GENCAN_TN_POST_CPP_HANDOFF_CANONICALIZE": "1",
-                "PACKMOL_GENCAN_TN_POST_CPP_HANDOFF_CPP_REPLAY": "1",
-                "PACKMOL_GENCAN_SPG_POST_CPP_HANDOFF": "1",
             }
         )
 

@@ -164,3 +164,14 @@ subroutine packmol_gencan_fortran_c(n, x, l, u, m, lambda, rho, epsgpen, epsgpsn
       d, ind, lastgpns, w, eta, delmin, lspgma, lspgmi, theta, gamma, beta, sigma1, sigma2, sterel, steabs, &
       epsrel, epsabs, infrel, infabs)
 end subroutine packmol_gencan_fortran_c
+
+subroutine packmol_evalhd_fortran_c(n) bind(C, name="packmol_evalhd_fortran_c")
+   use iso_c_binding, only : c_int
+   implicit none
+
+   integer(c_int), intent(in) :: n
+
+   external :: evalhd
+
+   call evalhd(n)
+end subroutine packmol_evalhd_fortran_c

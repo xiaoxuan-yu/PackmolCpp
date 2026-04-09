@@ -1140,24 +1140,25 @@ SPG post-tail continuation increment (default C++ path):
   `spg_post_nonterminal` no longer waits for the end-of-function fallback dispatch to
   decide continuation.
 - New behavior:
-  - when `PACKMOL_GENCAN_SPG_POST_CPP_HANDOFF` is not enabled and SPG post-step remains
-    nonterminal, the bridge now seeds current `x/f/counters/s/y` state and immediately
-    re-enters the existing C++ tail continuation path via `dispatch_tail_fallback_cpp(...)`.
-  - explicit SPG handoff debug path remains available for draft probes.
+  - when SPG post-step remains nonterminal, the bridge seeds current
+    `x/f/counters/s/y` state and continues through the in-bridge C++ continuation path.
+  - later cleanup removed the old SPG-specific handoff/debug branch; only the AB replay
+    compatibility path remains, and it is wired directly instead of through a dedicated
+    SPG tail helper.
 - Intent:
   - make the default `cpp` path continue from the in-bridge post-step state instead of
     depending on the legacy end-of-function tail handoff shape.
 
 SPG replay nested-TN guard increment:
 
-- Isolated drift source for `test_gencan_spg_post_cpp_handoff_drift_strict`:
+- Isolated drift source during the earlier SPG handoff probe wave:
   - the remaining mismatch was not only bookkeeping; nested `tn_post_nonterminal`
     continuation reached from SPG replay also drifted in final state (`f/x/g`) and counters.
 - Added an explicit nested-TN handoff gate:
   - when `spg_post` replay is active (`g_spg_post_cpp_replay_depth > 0`), nested
     `tn_post_nonterminal` C++ tail continuation is now treated as experimental and is only
     allowed when `PACKMOL_GENCAN_HANDOFF_CPP_TAIL_ALLOW_TN_POST=1` is explicitly set.
-  - otherwise the nested TN leg falls back to the already-validated legacy tail semantics.
+  - otherwise the nested TN leg stays on the already-validated C++ blocked-tail path.
 - Scope:
   - this change stabilizes the default SPG replay closure path without removing the
     explicit migration probe for nested TN C++ tail work.
@@ -1167,10 +1168,7 @@ Current progress snapshot:
 - Completed in code:
   - default `spg_post_nonterminal` path now seeds and re-enters C++ continuation directly.
   - nested TN tail inside SPG replay is now opt-in instead of silently active by default.
-- Added explicit measurement for the remaining nested-TN gap:
-  - `test_gencan_spg_post_nested_tn_cpp_tail_report`
-  - runs `test_gencan_spg_post_ab_probe` with explicit `PACKMOL_GENCAN_HANDOFF_CPP_TAIL_ALLOW_TN_POST=1`
-    and prints structured drift against the Fortran baseline instead of treating the path as closed.
+- Added explicit measurement for the remaining nested-TN gap during the migration-probe phase.
 - Remaining open work:
   - make explicit nested `tn_post_nonterminal` C++ tail continuation drift-free so the
     opt-in guard can be removed.
@@ -1180,4 +1178,68 @@ Current progress snapshot:
 Verification snapshot (2026-04-02):
 
 - `cmake --build build --target test_gencan_spg_post_ab_probe test_gencan_ab_probe test_gencan_runtime_driver_probe` passed.
-- `ctest --test-dir build --output-on-failure -R "test_gencan_(spg_post_cpp_handoff_drift_strict|spg_post_cpp_handoff_draft_smoke|handoff_cpp_tail_draft|tn_cpp_handoff_drift_strict|tn_cpp_handoff_cpp_replay_drift_strict|ab_no_fallback|ab)$"` passed.
+- Historical migration-probe wave:
+  - earlier handoff/replay drift probes passed before those migration-only tests were retired.
+
+Natural-shape restoration plan (post-wrapper cleanup, 2026-04-03):
+
+- Context:
+  - legacy Fortran tail fallback has been removed from the default `cpp/ab` path.
+  - generic tail dispatch wrapper has been eliminated; the remaining tail surface is now
+    explicit helper-based continuation for:
+    - `spg_post_nonterminal`
+    - `tn_post_nonterminal`
+    - `tn_no_free_variables`
+- Next migration goal:
+  - stop treating those cases as "tail reasons" and absorb them back into the regular
+    `gencan` main-loop control flow, matching the original Fortran driver shape more closely.
+  - replace the current "step -> reason -> continuation helper" shape with explicit
+    "step -> post-check -> next phase" transitions inside the bridge.
+- Planned execution order:
+  - 1. introduce a thin explicit next-phase state in the bridge loop.
+    - candidate phases:
+      - `enter_spg`
+      - `enter_tn`
+      - `post_spg`
+      - `post_tn`
+      - `stop`
+    - this state is a temporary migration aid and should replace `fallback_reason`,
+      not become a permanent second control plane.
+  - 2. absorb `spg_post_nonterminal` first.
+    - keep all existing bookkeeping (`iter/fcnt/gcnt`, `progress_*`, `lastgpns`) in
+      their current locations.
+    - only change the control-flow destination so post-SPG nonterminal continuation
+      becomes a normal next-phase transition instead of a helper handoff.
+  - 3. absorb `tn_post_nonterminal`.
+    - keep TN replay / blocked-tail logic semantically frozen at first.
+    - move the decision of "continue with TN / continue with SPG / stop" into the
+      bridge's explicit post-TN phase.
+  - 4. absorb `tn_no_free_variables`.
+    - reclassify it as a normal post-TN branch rather than a standalone tail reason.
+    - decide its next state explicitly in-bridge instead of routing through a helper.
+  - 5. remove the dedicated continuation helpers once the three branches above are
+    encoded directly in the main loop.
+- Freezing rules for the first semantic wave:
+  - do not simplify replay, blocked-tail, or shadow logic at the same time as moving it.
+  - move control flow first; simplify implementation only after parity is re-established.
+  - treat drift in counters as a blocker even when final `f/x/inform` still match.
+- Primary parity checks during this phase:
+  - `inform`
+  - final `f/x/g`
+  - counters:
+    - `iter`
+    - `fcnt`
+    - `gcnt`
+    - `spgiter`
+    - `tniter`
+  - progress history:
+    - `progress_fprev`
+    - `progress_bestprog`
+    - `progress_itnfp`
+  - `lastgpns`
+- Expected completion condition:
+  - no `fallback_reason` variable remains in the main bridge path.
+  - no `continue_spg_post_nonterminal_cpp(...)` helper remains.
+  - no `continue_tn_tail_reason_cpp(...)` helper remains.
+  - SPG/TN/post-step control flow is once again represented directly inside the bridge
+    loop, close to the natural shape of the original Fortran driver.
