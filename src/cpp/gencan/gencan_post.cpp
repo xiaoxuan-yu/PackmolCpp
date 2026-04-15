@@ -1,4 +1,4 @@
-#include "gencan/internal.hpp"
+#include "gencan/api.hpp"
 
 #include <algorithm>
 #include <cmath>

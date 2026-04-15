@@ -32,6 +32,10 @@ cmd = "ctest --test-dir build --output-on-failure -L component"
 depends-on = ["build"]
 cmd = "ctest --test-dir build --output-on-failure -L gencan"
 
+[tasks.benchmark-gencan-e2e]
+depends-on = ["build"]
+cmd = "python scripts/benchmark_gencan_e2e.py --build-dir build"
+
 [tasks.test-regression]
 depends-on = ["build"]
 cmd = "ctest --test-dir build --output-on-failure -L regression"

@@ -51,11 +51,14 @@ pixi run build
 pixi run test-unit
 pixi run test-component
 pixi run test-gencan
+pixi run benchmark-gencan-e2e
 pixi run test-regression
 pixi run test-all
 ```
 
 These tasks configure the CMake/Ninja build, generate the procedure inventory under `tests/inventory/`, and run the layered Fortran baseline tests used for the C++ migration.
+
+`pixi run benchmark-gencan-e2e` runs a small end-to-end GENCAN benchmark on representative inputs and reports both timing and output-behavior comparisons between `PACKMOL_GENCAN_IMPL=fortran` and `PACKMOL_GENCAN_IMPL=cpp`.
 
 ### Manual compilation
 
@@ -107,5 +110,4 @@ L Martinez, R Andrade, EG Birgin, JM Martinez, Packmol: A package for building i
 
 JM Martinez, L Martinez, Packing optimization for the automated generation of complex system's initial configurations for molecular dynamics and docking. Journal of Computational Chemistry, 24, 819-825, 2003.
 (https://doi.org/10.1002/jcc.10216)
-
 

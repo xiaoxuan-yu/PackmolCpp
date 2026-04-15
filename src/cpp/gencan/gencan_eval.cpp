@@ -1,4 +1,4 @@
-#include "gencan/internal.hpp"
+#include "gencan/api.hpp"
 
 #include <algorithm>
 #include <cmath>
@@ -43,6 +43,21 @@ extern "C" void packmol_precision_state_fortran_c(
     double* frest_value
 );
 
+void eval_objective_full_cpp(
+    const int* n,
+    double* x,
+    const int* m,
+    const double* lambda,
+    const double* rho,
+    double* f,
+    int* inform
+) {
+    if (try_eval_objective_full_cpp(n, x, m, lambda, rho, f, inform)) {
+        return;
+    }
+    packmol_evalal_fortran_c(n, x, m, lambda, rho, f, inform);
+}
+
 void calcf_cpp_reduced(
     const int* nind,
     const int* ind,
@@ -61,7 +76,7 @@ void calcf_cpp_reduced(
         x[i] = xc[i];
     }
     expand_inplace(nind_val, ind, x);
-    packmol_evalal_fortran_c(n, x, m, lambda, rho, f, inform);
+    eval_objective_full_cpp(n, x, m, lambda, rho, f, inform);
     shrink_inplace(nind_val, ind, x);
 }
 
@@ -86,11 +101,7 @@ void calcg_cpp_reduced(
         x[i] = xc[i];
     }
     expand_inplace(nind_val, ind, x);
-    if (*gtype == 0) {
-        packmol_evalnal_fortran_c(n, x, m, lambda, rho, g, inform);
-    } else {
-        packmol_evalnaldiff_fortran_c(n, x, m, lambda, rho, g, sterel, steabs, inform);
-    }
+    eval_gradient_full_cpp(n, x, m, lambda, rho, gtype, g, sterel, steabs, inform);
     shrink_inplace(nind_val, ind, x);
     shrink_inplace(nind_val, ind, g);
 }
@@ -109,17 +120,41 @@ void eval_gradient_full_cpp(
 ) {
     if (*gtype == 0) {
         packmol_evalnal_fortran_c(n, x, m, lambda, rho, g, inform);
-    } else {
-        packmol_evalnaldiff_fortran_c(n, x, m, lambda, rho, g, sterel, steabs, inform);
+        return;
+    }
+
+    *inform = 0;
+    for (int j = 0; j < *n; ++j) {
+        const double xj = x[j];
+        const double step = std::max(*steabs, (*sterel) * std::abs(xj));
+
+        x[j] = xj + step;
+        double fplus = 0.0;
+        eval_objective_full_cpp(n, x, m, lambda, rho, &fplus, inform);
+        if (*inform < 0) {
+            x[j] = xj;
+            return;
+        }
+
+        x[j] = xj - step;
+        double fminus = 0.0;
+        eval_objective_full_cpp(n, x, m, lambda, rho, &fminus, inform);
+        if (*inform < 0) {
+            x[j] = xj;
+            return;
+        }
+
+        g[j] = (fplus - fminus) / (2.0 * step);
+        x[j] = xj;
     }
 }
 
-bool packmolprecision_from_state_cpp() {
-    double precision_value = 0.0;
-    double fdist_value = 0.0;
-    double frest_value = 0.0;
-    packmol_precision_state_fortran_c(&precision_value, &fdist_value, &frest_value);
-    return fdist_value < precision_value && frest_value < precision_value;
+PackmolPrecisionState read_packmol_precision_state_cpp() {
+    PackmolPrecisionState state{0.0, 0.0, 0.0};
+    packmol_precision_state_fortran_c(
+        &state.precision_value, &state.fdist_value, &state.frest_value
+    );
+    return state;
 }
 
 bool packmolprecision_cpp(
@@ -131,11 +166,12 @@ bool packmolprecision_cpp(
     int* eval_flag
 ) {
     double f_unused = 0.0;
-    packmol_evalal_fortran_c(n, x, m, lambda, rho, &f_unused, eval_flag);
+    eval_objective_full_cpp(n, x, m, lambda, rho, &f_unused, eval_flag);
     if (*eval_flag < 0) {
         return false;
     }
-    return packmolprecision_from_state_cpp();
+    const PackmolPrecisionState state = read_packmol_precision_state_cpp();
+    return state.fdist_value < state.precision_value && state.frest_value < state.precision_value;
 }
 
 void calchddiff_cpp_reduced(

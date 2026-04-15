@@ -19,7 +19,7 @@ double precision function fparc(icart,firstjcart)
 
    ! LOCAL SCALARS
    integer :: jcart
-   double precision :: datom, tol, short_tol, short_tol_penalty, short_tol_scale
+   double precision :: datom, tol, short_tol, short_tol_penalty, short_tol_scale, pair_penalty
    double precision :: vdiff(3)
 
    fparc = 0.0d0
@@ -50,20 +50,24 @@ double precision function fparc(icart,firstjcart)
       !
       ! Otherwise, compute distance and evaluate function for this pair
       !
+      pair_penalty = 0.0d0
       vdiff = delta_vector(xcart(icart,:), xcart(jcart,:), pbc_length)
       datom = ( vdiff(1) )**2 + ( vdiff(2) )**2 + ( vdiff(3) )**2
       tol = (radius(icart)+radius(jcart))**2
       if ( datom < tol ) then
-         fparc = fparc + fscale(icart)*fscale(jcart)*(datom-tol)**2
+         pair_penalty = pair_penalty + fscale(icart)*fscale(jcart)*(datom-tol)**2
          if ( use_short_radius(icart) .or. use_short_radius(jcart) ) then
             short_tol = (short_radius(icart)+short_radius(jcart))**2
             if ( datom < short_tol ) then
                short_tol_penalty = datom-short_tol
                short_tol_scale = dsqrt(short_radius_scale(icart)*short_radius_scale(jcart))
                short_tol_scale = short_tol_scale*(tol**2/short_tol**2)
-               fparc = fparc + fscale(icart)*fscale(jcart)*short_tol_scale*short_tol_penalty**2
+               pair_penalty = pair_penalty + fscale(icart)*fscale(jcart)*short_tol_scale*short_tol_penalty**2
             end if
          end if
+         fparc = fparc + pair_penalty
+         pair_penalty_sum = pair_penalty_sum + pair_penalty
+         pair_penalty_count = pair_penalty_count + 1
       end if
       tol = (radius_ini(icart)+radius_ini(jcart))**2
       fdist = dmax1(tol-datom,fdist)
@@ -75,4 +79,3 @@ double precision function fparc(icart,firstjcart)
    end do
 
 end function fparc
-

@@ -29,6 +29,10 @@ subroutine computef(n,x,f)
    f = 0.d0
    frest = 0.d0
    fdist = 0.d0
+   pair_penalty_sum = 0.d0
+   constraint_penalty_sum = 0.d0
+   pair_penalty_count = 0
+   constraint_penalty_count = 0
 
    ! Reset cells
 
@@ -76,6 +80,8 @@ subroutine computef(n,x,f)
             call comprest(icart,fplus)
             f = f + fplus
             frest = dmax1(frest,fplus)
+            constraint_penalty_sum = constraint_penalty_sum + fplus
+            if ( fplus .gt. 0.d0 ) constraint_penalty_count = constraint_penalty_count + 1
             if(move) frest_atom(icart) = frest_atom(icart) + fplus
 
             ! Putting atoms in their cells

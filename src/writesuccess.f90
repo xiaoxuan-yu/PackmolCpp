@@ -11,11 +11,20 @@
 subroutine writesuccess(itype,fdist,frest,f)
 
     use input, only : input_itype
-    use compute_data, only : ntype
+    use compute_data, only : ntype, pair_penalty_sum, constraint_penalty_sum, pair_penalty_count, &
+        constraint_penalty_count
     use ahestetic
     implicit none
     integer :: itype
     double precision :: fdist, frest, f
+    character(len=32) :: report_env
+    logical :: report_penalty_stats
+
+    report_env = ''
+    call get_environment_variable('PACKMOL_REPORT_PENALTY_STATS', report_env)
+    report_penalty_stats = report_env(1:1) == '1' .or. report_env(1:1) == 't' .or. &
+                           report_env(1:1) == 'T' .or. report_env(1:1) == 'y' .or. &
+                           report_env(1:1) == 'Y'
   
     if(itype.le.ntype) then
         write(*,dash1_line)
@@ -23,6 +32,12 @@ subroutine writesuccess(itype,fdist,frest,f)
         write(*,*)' Objective function value: ', f
         write(*,*)' Maximum violation of target distance: ',fdist
         write(*,*)' Max. constraint violation: ', frest
+        if ( report_penalty_stats ) then
+            write(*,*)' Pair penalty sum: ', pair_penalty_sum
+            write(*,*)' Constraint penalty sum: ', constraint_penalty_sum
+            write(*,*)' Active pair penalty count: ', pair_penalty_count
+            write(*,*)' Active constraint penalty count: ', constraint_penalty_count
+        end if
         write(*,dash1_line)
     else
         write(*,hash3_line)
@@ -41,9 +56,14 @@ subroutine writesuccess(itype,fdist,frest,f)
                   &t8,' Journal of Computational Chemistry, 30(13) pp. 2157-2164, 2009.', /,&
                   &t18,' https://doi.org/10.1002/jcc.21224' &
                   &)")
+        if ( report_penalty_stats ) then
+            write(*,*)' Pair penalty sum: ', pair_penalty_sum
+            write(*,*)' Constraint penalty sum: ', constraint_penalty_sum
+            write(*,*)' Active pair penalty count: ', pair_penalty_count
+            write(*,*)' Active constraint penalty count: ', constraint_penalty_count
+        end if
         write(*,hash3_line)
     end if
 
 end subroutine writesuccess
-
 
