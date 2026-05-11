@@ -50,10 +50,14 @@ bool gencan_debug_enabled() {
     return parse_env_flag_default_false("PACKMOL_GENCAN_DEBUG");
 }
 
+bool cg_trace_enabled() {
+    return parse_env_flag_default_false("PACKMOL_GENCAN_CG_TRACE");
+}
+
 bool cg_dtw_relax_enabled() {
     const char* env = std::getenv("PACKMOL_GENCAN_CG_DTW_RELAX");
     if (env == nullptr) {
-        return true;
+        return false;
     }
     return env[0] == '1' || env[0] == 't' || env[0] == 'T' || env[0] == 'y' || env[0] == 'Y';
 }
@@ -68,4 +72,40 @@ bool use_cpp_numeric_kernel() {
 
 bool use_cpp_eval_kernel() {
     return parse_env_flag_default_false("PACKMOL_GENCAN_EVAL_CPP");
+}
+
+bool use_cpp_gradient_kernel() {
+    return parse_env_flag_default_false("PACKMOL_GENCAN_GRAD_CPP");
+}
+
+bool use_cpp_spgls_kernel() {
+    const char* env = std::getenv("PACKMOL_GENCAN_SPGLS_CPP");
+    if (env == nullptr) {
+        return true;
+    }
+    return !(env[0] == '0' || env[0] == 'f' || env[0] == 'F' || env[0] == 'n' || env[0] == 'N');
+}
+
+bool use_cpp_tnls_kernel() {
+    const char* env = std::getenv("PACKMOL_GENCAN_TNLS_CPP");
+    if (env == nullptr) {
+        return true;
+    }
+    return !(env[0] == '0' || env[0] == 'f' || env[0] == 'F' || env[0] == 'n' || env[0] == 'N');
+}
+
+bool use_cpp_cg_kernel() {
+    const char* env = std::getenv("PACKMOL_GENCAN_CG_CPP");
+    if (env == nullptr) {
+        return true;
+    }
+    return !(env[0] == '0' || env[0] == 'f' || env[0] == 'F' || env[0] == 'n' || env[0] == 'N');
+}
+
+bool use_cpp_calchddiff_kernel() {
+    const char* env = std::getenv("PACKMOL_GENCAN_CALCHDDIFF_CPP");
+    if (env == nullptr) {
+        return true;
+    }
+    return !(env[0] == '0' || env[0] == 'f' || env[0] == 'F' || env[0] == 'n' || env[0] == 'N');
 }

@@ -343,6 +343,33 @@ ProjectedGradientSummary analyze_projected_gradient(
     return summary;
 }
 
+void trace_solver_line(
+    const char* tag,
+    const double f_value,
+    const PackmolPrecisionState& precision_state,
+    const ProjectedGradientSummary& summary,
+    const double xnorm,
+    const double ometa2
+) {
+    if (!gencan_debug_enabled()) {
+        return;
+    }
+    std::fprintf(
+        stderr,
+        "[gencan-cpp] %s f=%.17e precision=%.17e fdist=%.17e frest=%.17e gpsupn=%.17e gpeucn2=%.17e gieucn2=%.17e xnorm=%.17e spg_test=%d\n",
+        tag,
+        f_value,
+        precision_state.precision_value,
+        precision_state.fdist_value,
+        precision_state.frest_value,
+        summary.gpsupn,
+        summary.gpeucn2,
+        summary.gieucn2,
+        xnorm,
+        (summary.gpeucn2 > 0.0 && summary.gieucn2 <= ometa2 * summary.gpeucn2) ? 1 : 0
+    );
+}
+
 void apply_solver_work_counters(
     const GencanCounters& target,
     const SolverWorkCounters& work_counters
@@ -609,6 +636,20 @@ int run_tn_post_phase(
         gpeucn20, epsgpen2, *options.epsgpsn, &cgeps, acgeps, bcgeps, *options.cgepsf,
         *options.cgepsi, gpsupn_try, gpsupn0
     );
+    if (gencan_debug_enabled()) {
+        std::fprintf(
+            stderr,
+            "[gencan-cpp] tn-setup iter=%d delta=%.17e cgeps=%.17e cgmaxit=%d kappa=%.17e gpsupn=%.17e gpeucn2=%.17e xnorm=%.17e\n",
+            iter_value,
+            delta,
+            cgeps,
+            cgmaxit,
+            kappa,
+            gpsupn_try,
+            gpeucn2_try,
+            xnorm_before
+        );
+    }
 
     std::vector<double> cg_s(commit_view.n, 0.0);
     std::vector<double> cg_w(commit_view.n, 0.0);
@@ -630,6 +671,17 @@ int run_tn_post_phase(
         options.sterel, options.steabs, options.epsrel, options.epsabs, options.infrel, options.infabs
     });
     cgcnt_work += cg_iter;
+    if (gencan_debug_enabled()) {
+        std::fprintf(
+            stderr,
+            "[gencan-cpp] tn-cg iter=%d inform=%d cg_iter=%d rbdtype=%d rbdind=%d\n",
+            iter_value,
+            cg_inform,
+            cg_iter,
+            rbdtype,
+            rbdind
+        );
+    }
 
     if (cg_inform < 0) {
         commit_xy_state(commit_view, f_try, x_work, g_work, tn_work_counters, cg_inform);
@@ -683,6 +735,17 @@ int run_tn_post_phase(
     if (tnls_inform < 0) {
         commit_xy_state(commit_view, f_work, x_work, g_work, tn_work_counters, tnls_inform);
         return tnls_inform;
+    }
+    if (gencan_debug_enabled()) {
+        std::fprintf(
+            stderr,
+            "[gencan-cpp] tn-line iter=%d inform=%d f=%.17e fcnt=%d gcnt=%d\n",
+            iter_value,
+            tnls_inform,
+            f_work,
+            fcnt_work,
+            gcnt_work
+        );
     }
 
     if (tnintcnt_work > tnint_prev) {
@@ -1286,6 +1349,7 @@ void packmol_gencan_gencan_solver_cpp(
             const bool precision_solution = packmolprecision_cpp(
                 n, x_try.data(), m, lambda, rho, &precision_eval_flag
             );
+            PackmolPrecisionState precision_state = read_packmol_precision_state_cpp();
             if (precision_eval_flag < 0) {
                 *f = f_try;
                 for (int i = 0; i < n_val; ++i) {
@@ -1310,6 +1374,14 @@ void packmol_gencan_gencan_solver_cpp(
                 return;
             }
             if (precision_solution) {
+                trace_solver_line(
+                    "entry-precision-solution",
+                    f_try,
+                    precision_state,
+                    ProjectedGradientSummary{0.0, 0.0, 0.0, 0},
+                    std::sqrt(norm2_kernel(n_val, x_try.data())),
+                    0.0
+                );
                 *f = f_try;
                 for (int i = 0; i < n_val; ++i) {
                     x[i] = x_try[i];
@@ -1407,16 +1479,19 @@ void packmol_gencan_gencan_solver_cpp(
                 double sts = 0.0;
                 double sty = 0.0;
                 const double ometa2 = (1.0 - *eta) * (1.0 - *eta);
+                trace_solver_line("entry", f_try, precision_state, try_summary, xnorm, ometa2);
 
                 while (true) {
                     int precision_loop_flag = 0;
                     const bool precision_loop = packmolprecision_cpp(
                         n, x, m, lambda, rho, &precision_loop_flag
                     );
+                    precision_state = read_packmol_precision_state_cpp();
                     if (precision_loop_flag < 0) {
                         *inform = precision_loop_flag;
                         return;
                     }
+                    trace_solver_line("loop", *f, precision_state, ProjectedGradientSummary{*gpsupn, *gpeucn2, gieucn2_try, nind_current}, xnorm, ometa2);
                     if (precision_loop || *gpeucn2 <= epsgpen2) {
                         *inform = 0;
                         return;
@@ -1479,11 +1554,17 @@ void packmol_gencan_gencan_solver_cpp(
 
                     int step_inform = -1;
                     if (gpeucn2_try > 0.0 && gieucn2_try <= ometa2 * gpeucn2_try) {
+                        if (gencan_debug_enabled()) {
+                            std::fprintf(stderr, "[gencan-cpp] choose=SPG iter=%d\n", *iter);
+                        }
                         step_inform = run_spg_post_phase(
                             problem, options, commit_view, *iter, xnorm, sts, sty, *f, *gpeucn2,
                             x_current, g_current
                         );
                     } else {
+                        if (gencan_debug_enabled()) {
+                            std::fprintf(stderr, "[gencan-cpp] choose=TN iter=%d nind=%d\n", *iter, nind_current);
+                        }
                         step_inform = run_tn_post_phase(
                             problem, options, commit_view, cg_schedule_seed, *iter, xnorm, sts, sty,
                             *f, *gpsupn, *gpeucn2, nind_current, x_current, g_current, ind_current

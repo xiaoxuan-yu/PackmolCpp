@@ -36,6 +36,23 @@ extern "C" void packmol_evalnaldiff_fortran_c(
 );
 
 extern "C" void packmol_evalhd_fortran_c(const int* n);
+extern "C" void packmol_calchddiff_fortran_c(
+    const int* nind,
+    const int* ind,
+    const int* n,
+    double* x,
+    double* d,
+    double* g,
+    const int* m,
+    const double* lambda,
+    const double* rho,
+    const int* gtype,
+    double* hd,
+    double* xtmp,
+    const double* sterel,
+    const double* steabs,
+    int* inform
+);
 
 extern "C" void packmol_precision_state_fortran_c(
     double* precision_value,
@@ -119,6 +136,9 @@ void eval_gradient_full_cpp(
     int* inform
 ) {
     if (*gtype == 0) {
+        if (try_eval_gradient_full_cpp(n, x, m, lambda, rho, g, inform)) {
+            return;
+        }
         packmol_evalnal_fortran_c(n, x, m, lambda, rho, g, inform);
         return;
     }
@@ -191,6 +211,12 @@ void calchddiff_cpp_reduced(
     const double* steabs,
     int* inform
 ) {
+    if (!use_cpp_calchddiff_kernel()) {
+        packmol_calchddiff_fortran_c(
+            nind, ind, n, x, d, g, m, lambda, rho, gtype, hd, xtmp, sterel, steabs, inform
+        );
+        return;
+    }
     const int nind_val = *nind;
     const int n_val = *n;
 

@@ -48,6 +48,7 @@ subroutine packmol_cg_fortran_c(nind, ind, n, x, m, lambda, rho, g, delta, l, u,
 
    integer(c_int), intent(in) :: nind, n, m, maxitnqmp, maxit, gtype, htvtype, trtype, iprint, ncomp
    logical(c_bool), intent(in) :: nearlyq
+   logical :: nearlyq_f
    integer(c_int), intent(inout) :: iter
    integer(c_int), intent(out) :: rbdtype, rbdind, inform
    integer(c_int), intent(in) :: ind(*)
@@ -58,7 +59,9 @@ subroutine packmol_cg_fortran_c(nind, ind, n, x, m, lambda, rho, g, delta, l, u,
 
    external :: cgf
 
-   call cgf(nind, ind, n, x, m, lambda, rho, g, delta, l, u, eps, epsnqmp, maxitnqmp, maxit, nearlyq, &
+   nearlyq_f = nearlyq
+
+   call cgf(nind, ind, n, x, m, lambda, rho, g, delta, l, u, eps, epsnqmp, maxitnqmp, maxit, nearlyq_f, &
       gtype, htvtype, trtype, iprint, ncomp, s, iter, rbdtype, rbdind, inform, w, y, r, d, sprev, theta, &
       sterel, steabs, epsrel, epsabs, infrel, infabs)
 end subroutine packmol_cg_fortran_c

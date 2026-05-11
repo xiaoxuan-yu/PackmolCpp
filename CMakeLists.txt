@@ -30,6 +30,7 @@ set(PACKMOL_CORE_SOURCES
        src/gencan/vector_ops.f
        src/gencan/numeric_utils.f
        src/gencan_ieee_signal_routines.f90
+       src/gencan_debug_trace.f90
        src/pgencan.f90
        src/initial.f90
        src/title.f90
@@ -67,6 +68,7 @@ set(PACKMOL_CORE_SOURCES
        src/computeg.f90
        src/eval_state_bridge.f90
        src/input.f90
+       src/gencan/reduced_wrapper_bridge.f90
 )
 
 add_library(packmol_gencan_cpp_obj OBJECT

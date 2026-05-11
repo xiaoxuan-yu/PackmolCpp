@@ -68,9 +68,15 @@ struct PackmolEvalStateSnapshot {
 
 GencanImplMode active_impl_mode();
 bool gencan_debug_enabled();
+bool cg_trace_enabled();
 bool cg_dtw_relax_enabled();
 bool use_cpp_numeric_kernel();
 bool use_cpp_eval_kernel();
+bool use_cpp_gradient_kernel();
+bool use_cpp_spgls_kernel();
+bool use_cpp_tnls_kernel();
+bool use_cpp_cg_kernel();
+bool use_cpp_calchddiff_kernel();
 void run_spgls_context_cpp(const GencanSpglsContext& context);
 void run_tnls_context_cpp(const GencanTnlsContext& context);
 void run_cg_context_cpp(const GencanCgContext& context);
@@ -206,6 +212,26 @@ bool eval_objective_full_cpp_direct(
     const double* lambda,
     const double* rho,
     double* f,
+    int* inform
+);
+
+bool try_eval_gradient_full_cpp(
+    const int* n,
+    double* x,
+    const int* m,
+    const double* lambda,
+    const double* rho,
+    double* g,
+    int* inform
+);
+
+bool eval_gradient_full_cpp_direct(
+    const int* n,
+    double* x,
+    const int* m,
+    const double* lambda,
+    const double* rho,
+    double* g,
     int* inform
 );
 

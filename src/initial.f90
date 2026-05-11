@@ -20,6 +20,17 @@ subroutine initial(n,x)
    use ahestetic
    use pbc
    implicit none
+   interface
+      subroutine packmol_gencan_debug_enabled_f(enabled)
+         logical, intent(out) :: enabled
+      end subroutine packmol_gencan_debug_enabled_f
+
+      subroutine packmol_gencan_debug_trace_initial(tag, itype, loop_idx, fx, frest)
+         character(len=*), intent(in) :: tag
+         integer, intent(in) :: itype, loop_idx
+         double precision, intent(in) :: fx, frest
+      end subroutine packmol_gencan_debug_trace_initial
+   end interface
    integer :: n, i, j, idatom, iatom, ilubar, ilugan, icart, itype, &
       imol, ntry, cell(3), ic, jc, kc, ifatom, &
       idfatom, iftype, jatom, ioerr, max_guess_try
@@ -30,12 +41,13 @@ subroutine initial(n,x)
    double precision, parameter :: twopi = 8.d0*datan(1.d0)
    double precision, allocatable :: cm_min(:,:), cm_max(:,:)
 
-   logical :: overlap, movebadprint, hasbad
+   logical :: overlap, movebadprint, hasbad, debug_trace
 
    character(len=strl) :: record
 
    ! We need to initialize the move logical variable
    move = .false.
+   call packmol_gencan_debug_enabled_f(debug_trace)
 
    ! Default status of the function evaluation
    init1 = .false.
@@ -191,8 +203,14 @@ subroutine initial(n,x)
       do while( frest > precision .and. i.le. nloop0_type(itype)-1 .and. hasbad)
          i = i + 1
          write(*,prog1_line)
+         if (debug_trace) then
+            call packmol_gencan_debug_trace_initial('phase1-before', itype, i, fx, frest)
+         end if
          call pgencan(n,x,fx)
          call computef(n,x,fx)
+         if (debug_trace) then
+            call packmol_gencan_debug_trace_initial('phase1-after', itype, i, fx, frest)
+         end if
          if(frest > precision) then
             write(*,"( a,i6,a,i6 )")'  Fixing bad orientations ... ', i,' of ', nloop0_type(itype)
             movebadprint = .true.
@@ -535,8 +553,14 @@ subroutine initial(n,x)
       do while( frest > precision .and. i <= nloop0_type(itype)-1 .and. hasbad)
          i = i + 1
          write(*,prog1_line)
+         if (debug_trace) then
+            call packmol_gencan_debug_trace_initial('phase2-before', itype, i, fx, frest)
+         end if
          call pgencan(n,x,fx)
          call computef(n,x,fx)
+         if (debug_trace) then
+            call packmol_gencan_debug_trace_initial('phase2-after', itype, i, fx, frest)
+         end if
          if(frest > precision) then
             write(*,"( a,i6,a,i6 )")'  Fixing bad orientations ... ', i,' of ', nloop0_type(itype)
             movebadprint = .true.

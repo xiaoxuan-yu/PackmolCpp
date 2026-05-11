@@ -253,16 +253,32 @@ C            < 0 = error in evalhd subroutine.
 
 C     LOCAL SCALARS
       character * 5 rbdtypea
-      logical samep
-      integer i,itnqmp,rbdnegaind,rbdnegatype,rbdposaind,rbdposatype
+      logical samep,detail_trace
+      integer i,itnqmp,rbdnegaind,rbdnegatype,rbdposaind,rbdposatype,
+     +        detail_call_target,detail_status,cg_call_id
+      integer, save :: cg_call_counter = 0
       double precision aa,alpha,amax,amax1,amax1n,amaxn,amax2,amax2n,
      +        amax2nx,amax2x,bb,bestprog,beta,cc,currprog,dd,dnorm2,dtr,
      +        dts,dtw,gnorm2,gts,norm2s,q,qamax,qamaxn,qprev,rnorm2,
      +        rnorm2prev,snorm2,snorm2prev
+      character(len=32) detail_value
 
 C     ==================================================================
 C     Initialization
 C     ==================================================================
+
+      cg_call_counter = cg_call_counter + 1
+      cg_call_id = cg_call_counter
+      detail_call_target = 0
+      detail_value = ''
+      call get_environment_variable('PACKMOL_GENCAN_CG_COMPARE_CALL',
+     + detail_value, status=detail_status)
+      if ( detail_status .eq. 0 ) then
+          read(detail_value,*,err=10) detail_call_target
+      end if
+ 10   continue
+      detail_trace = detail_call_target .gt. 0 .and.
+     + detail_call_target .eq. cg_call_id
 
       gnorm2   = norm2s(nind,g)
 
@@ -280,6 +296,12 @@ C     ==================================================================
       gts      =  0.0d0
       snorm2   =  0.0d0
       rnorm2   = gnorm2
+
+      if ( detail_trace ) then
+          write(*,*) '[gencan-fortran-cg] entry call=', cg_call_id,
+     +     ' nind=', nind, ' delta=', delta, ' eps=', eps,
+     +     ' gnorm2=', gnorm2
+      end if
 
 C     ==================================================================
 C     Print initial information
@@ -422,6 +444,12 @@ C     Compute d^T w and ||w||^2
           dtw = dtw + d(i) * w(i)
       end do 
 
+      if ( detail_trace ) then
+          write(*,*) '[gencan-fortran-cg] step-pre call=', cg_call_id,
+     +     ' iter=', iter, ' dtr=', dtr, ' dtw=', dtw,
+     +     ' rnorm2=', rnorm2, ' dnorm2=', dnorm2
+      end if
+
 C     ==================================================================
 C     Compute maximum step
 C     ==================================================================
@@ -517,6 +545,14 @@ C     (and not -d in the case of amaxn)
       amax  = min( amax1 , amax2  )
       amaxn = max( amax1n, amax2n )
 
+      if ( detail_trace ) then
+          write(*,*) '[gencan-fortran-cg] bounds call=', cg_call_id,
+     +     ' iter=', iter, ' amax1=', amax1, ' amax1n=', amax1n,
+     +     ' amax2=', amax2, ' amax2n=', amax2n
+          write(*,*) '[gencan-fortran-cg] bounds-ext call=', cg_call_id,
+     +     ' iter=', iter, ' amax=', amax, ' amaxn=', amaxn
+      end if
+
 C     ==================================================================
 C     Compute the step (and the quadratic functional value at the new 
 C     point)
@@ -574,6 +610,13 @@ C         Else, stop at the current point
 
                   inform = 7
 
+                  if ( detail_trace ) then
+                      write(*,*) '[gencan-fortran-cg] neg-curv-stop'
+                      write(*,*) ' call=', cg_call_id, ' iter=', iter,
+     +                 ' q=', q, ' qamax=', qamax, ' qamaxn=', qamaxn
+                      write(*,*) ' dtr=', dtr, ' dtw=', dtw
+                  end if
+
                   if ( iprint .ge. 4 ) then
                       write(*, 997) inform
                       write(10,997) inform
@@ -584,6 +627,11 @@ C         Else, stop at the current point
               end if
 
           end if
+      end if
+
+      if ( detail_trace ) then
+          write(*,*) '[gencan-fortran-cg] step call=', cg_call_id,
+     +     ' iter=', iter, ' alpha=', alpha, ' q=', q
       end if
 
 C     ==================================================================
@@ -615,6 +663,11 @@ C     Increment number of iterations
 C     ==================================================================
 
       iter = iter + 1
+
+      if ( detail_trace ) then
+          write(*,*) '[gencan-fortran-cg] post call=', cg_call_id,
+     +     ' iter=', iter, ' snorm2=', snorm2, ' rnorm2=', rnorm2
+      end if
 
 C     ==================================================================
 C     Print information of this iteration
@@ -790,6 +843,11 @@ C     Return
 C     ==================================================================
 
  500  continue
+
+      if ( detail_trace ) then
+          write(*,*) '[gencan-fortran-cg] exit call=', cg_call_id,
+     +     ' inform=', inform, ' iter=', iter, ' snorm2=', snorm2
+      end if
 
 C     Print final information
 

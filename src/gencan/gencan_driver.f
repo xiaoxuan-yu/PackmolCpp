@@ -7,6 +7,7 @@
      +ind,lastgpns,w,eta,delmin,lspgma,lspgmi,theta,gamma,beta,sigma1,
      +sigma2,sterel,steabs,epsrel,epsabs,infrel,infabs)
 
+      use compute_data, only : fdist, frest
       implicit none
 
 C     SCALAR ARGUMENTS
@@ -926,7 +927,7 @@ C     LOCAL SCALARS
       double precision acgeps,amax,amaxx,bestprog,bcgeps,cgeps,currprog,
      +        delta,epsgpen2,fprev,gieucn2,gpeucn20,gpi,gpnmax,gpsupn0,
      +        kappa,lamspg,ometa2,sts,sty,xnorm
-      logical packmolprecision
+      logical debug_trace,packmolprecision
 
 C     ==================================================================
 C     Initialization
@@ -1104,6 +1105,13 @@ C     And it will be used for the linear relation of cgmaxit
       gpsupn0  = gpsupn
       gpeucn20 = gpeucn2
 
+      call packmol_gencan_debug_enabled_f(debug_trace)
+      if ( debug_trace ) then
+          call packmol_gencan_debug_trace_iter('entry', f, epsgpsn,
+     +    fdist, frest, gpsupn, gpeucn2, gieucn2, xnorm,
+     +    gieucn2 .le. ometa2 * gpeucn2)
+      end if
+
 C     Print initial information
 
 c LM: progress bar for packmol
@@ -1136,6 +1144,12 @@ C     Main loop
 C     ==================================================================
       
  100  continue
+
+      if ( debug_trace ) then
+          call packmol_gencan_debug_trace_iter('loop', f, epsgpsn,
+     +    fdist, frest, gpsupn, gpeucn2, gieucn2, xnorm,
+     +    gieucn2 .le. ometa2 * gpeucn2)
+      end if
 
 C     ==================================================================
 C     Test stopping criteria
@@ -1399,6 +1413,11 @@ C         set by the user.
      +    kappa, gpeucn2, gpeucn20, epsgpen2, epsgpsn,
      +    cgeps, acgeps, bcgeps, cgepsf, cgepsi, gpsupn, gpsupn0)
 
+          if ( debug_trace ) then
+              call packmol_gencan_debug_trace_tn(iter, delta, cgeps,
+     +        cgmaxit, kappa, gpsupn, gpeucn2, xnorm)
+          end if
+
 c          if( ucgmaxit .le. 0 ) then
 c              if ( nearlyq ) then
 c                  cgmaxit = nind
@@ -1438,6 +1457,11 @@ C         Call conjugate gradients
      +    w(4*n+1),theta,sterel,steabs,epsrel,epsabs,infrel,infabs)
 
           cgcnt = cgcnt + cgiter
+
+          if ( debug_trace ) then
+              call packmol_gencan_debug_trace_tn_result('tn-cg',
+     +        iter, inform, cgiter, rbdtype, rbdind, f)
+          end if
 
           if ( inform .lt. 0 ) then
 
@@ -1488,6 +1512,11 @@ C         Perform the line search
      +    fcnt,gcnt,tnintcnt,tnexgcnt,tnexbcnt,inform,w(1),w(n+1),
      +    w(2*n+1),gamma,beta,sigma1,sigma2,sterel,steabs,epsrel,epsabs,
      +    infrel,infabs)
+
+          if ( debug_trace ) then
+              call packmol_gencan_debug_trace_tn_result('tn-line',
+     +        iter, inform, cgiter, rbdtype, rbdind, f)
+          end if
 
           if ( inform .lt. 0 ) then
 

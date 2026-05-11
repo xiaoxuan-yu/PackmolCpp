@@ -364,6 +364,20 @@ bool tnls_cpp_subset(
 }
 
 void run_tnls_context_cpp(const GencanTnlsContext& context) {
+    const bool use_fortran = active_impl_mode() == GencanImplMode::kFortran || !use_cpp_tnls_kernel();
+    if (use_fortran) {
+        packmol_tnls_fortran_c(
+            context.nind, context.ind, context.n, context.x, context.m, context.lambda,
+            context.rho, context.l, context.u, context.f, context.g, context.d, context.amax,
+            context.rbdtype, context.rbdind, context.nint, context.next, context.mininterp,
+            context.maxextrap, context.fmin, context.maxfc, context.gtype, context.iprint,
+            context.fcnt, context.gcnt, context.intcnt, context.exgcnt, context.exbcnt,
+            context.inform, context.xplus, context.xtmp, context.xbext, context.gamma,
+            context.beta, context.sigma1, context.sigma2, context.sterel, context.steabs,
+            context.epsrel, context.epsabs, context.infrel, context.infabs
+        );
+        return;
+    }
     switch (active_impl_mode()) {
         case GencanImplMode::kFortran:
             packmol_tnls_fortran_c(

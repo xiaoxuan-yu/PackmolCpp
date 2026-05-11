@@ -129,3 +129,55 @@ extern "C" void packmol_evalal_cpp_direct_c(
         *flag = -1;
     }
 }
+
+extern "C" void packmol_evalnal_cpp_direct_c(
+    const int* n,
+    double* x,
+    const int* m,
+    const double* lambda,
+    const double* rho,
+    double* g,
+    int* flag,
+    int* used_cpp
+) {
+    const bool ok = eval_gradient_full_cpp_direct(n, x, m, lambda, rho, g, flag);
+    if (used_cpp != nullptr) {
+        *used_cpp = ok ? 1 : 0;
+    }
+    if (!ok && flag != nullptr) {
+        *flag = -1;
+    }
+}
+
+extern "C" void packmol_calcf_cpp_reduced_direct_c(
+    const int* nind,
+    const int* ind,
+    double* x,
+    const int* n,
+    const double* xc,
+    const int* m,
+    const double* lambda,
+    const double* rho,
+    double* f,
+    int* inform
+) {
+    calcf_cpp_reduced(nind, ind, x, n, xc, m, lambda, rho, f, inform);
+}
+
+extern "C" void packmol_calcg_cpp_reduced_direct_c(
+    const int* nind,
+    const int* ind,
+    double* x,
+    const int* n,
+    const double* xc,
+    const int* m,
+    const double* lambda,
+    const double* rho,
+    const int* gtype,
+    double* g,
+    const double* sterel,
+    const double* steabs,
+    int* inform
+) {
+    calcg_cpp_reduced(nind, ind, x, n, xc, m, lambda, rho, gtype, g, sterel, steabs, inform);
+}

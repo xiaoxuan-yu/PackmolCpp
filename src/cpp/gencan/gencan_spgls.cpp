@@ -183,6 +183,17 @@ void spgls_cpp(
 }
 
 void run_spgls_context_cpp(const GencanSpglsContext& context) {
+    const bool use_fortran = active_impl_mode() == GencanImplMode::kFortran || !use_cpp_spgls_kernel();
+    if (use_fortran) {
+        packmol_spgls_fortran_c(
+            context.n, context.x, context.m, context.lambda, context.rho, context.f, context.g,
+            context.l, context.u, context.lamspg, context.nint, context.mininterp, context.fmin,
+            context.maxfc, context.iprint, context.fcnt, context.inform, context.xtrial, context.d,
+            context.gamma, context.sigma1, context.sigma2, context.sterel, context.steabs,
+            context.epsrel, context.epsabs, context.infrel, context.infabs
+        );
+        return;
+    }
     switch (active_impl_mode()) {
         case GencanImplMode::kFortran:
             packmol_spgls_fortran_c(

@@ -2,12 +2,26 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdlib>
 #include <cstdio>
 #include <vector>
 
 namespace {
 
 thread_local int g_cg_active_call_id = 0;
+
+int cg_compare_call_target() {
+    const char* env = std::getenv("PACKMOL_GENCAN_CG_COMPARE_CALL");
+    if (env == nullptr || env[0] == '\0') {
+        return 0;
+    }
+    return std::atoi(env);
+}
+
+bool cg_detail_trace_enabled() {
+    const int target = cg_compare_call_target();
+    return target > 0 && g_cg_active_call_id == target;
+}
 
 double dot_cpp_stable(const int n, const double* a, const double* b) {
     double sum = 0.0;
@@ -203,6 +217,7 @@ void cg_cpp_full(
     (void)rho;
     (void)iprint;
     const bool debug = gencan_debug_enabled();
+    const bool detail = cg_detail_trace_enabled();
     *rbdtype = 0;
     *rbdind = 0;
     auto norm2 = [&](const double* v) { return norm2_kernel_local(nind_val, v); };
@@ -228,6 +243,19 @@ void cg_cpp_full(
     double alpha = 0.0;
     double dtw = 0.0;
     double rnorm2prev = rnorm2;
+
+    if (detail) {
+        std::fprintf(
+            stderr,
+            "[gencan-cpp-cg] entry call=%d nind=%d delta=%.17e eps=%.17e gnorm2=%.17e nearlyq=%d\n",
+            g_cg_active_call_id,
+            nind_val,
+            *delta,
+            *eps,
+            gnorm2,
+            *nearlyq ? 1 : 0
+        );
+    }
 
     while (true) {
         if (rnorm2 <= 1.0e-16 ||
@@ -285,6 +313,19 @@ void cg_cpp_full(
 
         dtw = dot(d, w);
         const double dts = dot(d, s);
+
+        if (detail) {
+            std::fprintf(
+                stderr,
+                "[gencan-cpp-cg] step-pre call=%d iter=%d dtr=%.17e dtw=%.17e rnorm2=%.17e dnorm2=%.17e\n",
+                g_cg_active_call_id,
+                *iter,
+                dtr,
+                dtw,
+                rnorm2,
+                dnorm2
+            );
+        }
 
         double amax1 = *infabs;
         double amax1n = -*infabs;
@@ -346,6 +387,27 @@ void cg_cpp_full(
         const double amax = std::min(amax1, amax2);
         const double amaxn = std::max(amax1n, amax2n);
 
+        if (detail) {
+            std::fprintf(
+                stderr,
+                "[gencan-cpp-cg] bounds call=%d iter=%d amax1=%.17e amax1n=%.17e amax2=%.17e amax2n=%.17e\n",
+                g_cg_active_call_id,
+                *iter,
+                amax1,
+                amax1n,
+                amax2,
+                amax2n
+            );
+            std::fprintf(
+                stderr,
+                "[gencan-cpp-cg] bounds-ext call=%d iter=%d amax=%.17e amaxn=%.17e\n",
+                g_cg_active_call_id,
+                *iter,
+                amax,
+                amaxn
+            );
+        }
+
         qprev = q;
         if (dtw > 0.0) {
             alpha = std::min(amax, rnorm2 / dtw);
@@ -353,11 +415,54 @@ void cg_cpp_full(
         } else {
             const double qamax = q + 0.5 * amax * amax * dtw + amax * dtr;
             if (*iter == 0) {
+                if (debug) {
+                    std::fprintf(
+                        stderr,
+                        "[gencan-cpp-cg] neg-curv first-iter call=%d iter=%d dtw=%.17e q=%.17e qamax=%.17e amax=%.17e\n",
+                        g_cg_active_call_id,
+                        *iter,
+                        dtw,
+                        q,
+                        qamax,
+                        amax
+                    );
+                }
                 alpha = amax;
                 q = qamax;
             } else {
                 const double qamaxn = q + 0.5 * amaxn * amaxn * dtw + amaxn * dtr;
                 const bool allow_negative_curvature_step = *nearlyq || cg_dtw_relax_enabled();
+                if (detail) {
+                    std::fprintf(
+                        stderr,
+                        "[gencan-cpp-cg] neg-curv call=%d iter=%d q=%.17e qamax=%.17e qamaxn=%.17e allow=%d nearlyq=%d relax=%d\n",
+                        g_cg_active_call_id,
+                        *iter,
+                        q,
+                        qamax,
+                        qamaxn,
+                        allow_negative_curvature_step ? 1 : 0,
+                        *nearlyq ? 1 : 0,
+                        cg_dtw_relax_enabled() ? 1 : 0
+                    );
+                }
+                if (debug) {
+                    std::fprintf(
+                        stderr,
+                        "[gencan-cpp-cg] neg-curv call=%d iter=%d dtw=%.17e q=%.17e qamax=%.17e qamaxn=%.17e allow=%d nearlyq=%d relax=%d amax=%.17e amaxn=%.17e\n",
+                        g_cg_active_call_id,
+                        *iter,
+                        dtw,
+                        q,
+                        qamax,
+                        qamaxn,
+                        allow_negative_curvature_step ? 1 : 0,
+                        *nearlyq ? 1 : 0,
+                        cg_dtw_relax_enabled() ? 1 : 0,
+                        amax,
+                        amaxn
+                    );
+                }
                 if (allow_negative_curvature_step && (qamax < q || qamaxn < q)) {
                     if (qamax < qamaxn) {
                         alpha = amax;
@@ -367,6 +472,14 @@ void cg_cpp_full(
                         q = qamaxn;
                     }
                 } else {
+                    if (debug) {
+                        std::fprintf(
+                            stderr,
+                            "[gencan-cpp-cg] neg-curv-stop call=%d iter=%d inform=7\n",
+                            g_cg_active_call_id,
+                            *iter
+                        );
+                    }
                     *rbdtype = 0;
                     *rbdind = 0;
                     *inform = 7;
@@ -379,6 +492,16 @@ void cg_cpp_full(
             sprev[i] = s[i];
             s[i] = s[i] + alpha * d[i];
         }
+        if (detail) {
+            std::fprintf(
+                stderr,
+                "[gencan-cpp-cg] step call=%d iter=%d alpha=%.17e q=%.17e\n",
+                g_cg_active_call_id,
+                *iter,
+                alpha,
+                q
+            );
+        }
         const double snorm2prev = snorm2;
         snorm2 = snorm2 + alpha * alpha * dnorm2 + 2.0 * alpha * dts;
 
@@ -389,6 +512,17 @@ void cg_cpp_full(
         rnorm2 = norm2(r);
 
         *iter += 1;
+
+        if (detail) {
+            std::fprintf(
+                stderr,
+                "[gencan-cpp-cg] post call=%d iter=%d snorm2=%.17e rnorm2=%.17e\n",
+                g_cg_active_call_id,
+                *iter,
+                snorm2,
+                rnorm2
+            );
+        }
 
         const double gts = dot(g, s);
         if (gts > 0.0 || gts * gts < (*theta) * (*theta) * gnorm2 * snorm2) {
@@ -496,9 +630,169 @@ extern "C" void packmol_cg_fortran_c(
     const double* infabs
 );
 
+extern "C" void packmol_cg_cpp_direct_c(
+    const int* nind,
+    const int* ind,
+    const int* n,
+    double* x,
+    const int* m,
+    const double* lambda,
+    const double* rho,
+    double* g,
+    const double* delta,
+    const double* l,
+    const double* u,
+    const double* eps,
+    const double* epsnqmp,
+    const int* maxitnqmp,
+    const int* maxit,
+    const bool* nearlyq,
+    const int* gtype,
+    const int* htvtype,
+    const int* trtype,
+    const int* iprint,
+    const int* ncomp,
+    double* s,
+    int* iter,
+    int* rbdtype,
+    int* rbdind,
+    int* inform,
+    double* w,
+    double* y,
+    double* r,
+    double* d,
+    double* sprev,
+    const double* theta,
+    const double* sterel,
+    const double* steabs,
+    const double* epsrel,
+    const double* epsabs,
+    const double* infrel,
+    const double* infabs,
+    int* used_cpp
+) {
+    cg_cpp_full(
+        nind, ind, n, x, m, lambda, rho, g, delta, l, u, eps, epsnqmp, maxitnqmp, maxit,
+        nearlyq, gtype, htvtype, trtype, iprint, theta, sterel, steabs, epsrel, epsabs,
+        infabs, s, w, y, r, d, sprev, iter, rbdtype, rbdind, inform
+    );
+    if (used_cpp != nullptr) {
+        *used_cpp = 1;
+    }
+    (void)ncomp;
+    (void)infrel;
+}
+
 void run_cg_context_cpp(const GencanCgContext& context) {
     static int cg_call_counter = 0;
     cg_call_counter += 1;
+    const bool trace = cg_trace_enabled();
+    const int compare_call = cg_compare_call_target();
+    const bool use_fortran = active_impl_mode() == GencanImplMode::kFortran || !use_cpp_cg_kernel();
+    if (trace) {
+        std::fprintf(
+            stderr,
+            "[gencan-cg-trace] call=%d kernel=%s nind=%d delta=%.17e eps=%.17e epsnqmp=%.17e maxit=%d gnorm2=%.17e\n",
+            cg_call_counter,
+            use_fortran ? "fortran" : "cpp",
+            *context.nind,
+            *context.delta,
+            *context.eps,
+            *context.epsnqmp,
+            *context.maxit,
+            norm2_kernel(*context.nind, context.g)
+        );
+    }
+    if (compare_call > 0 && cg_call_counter == compare_call) {
+        const int n_val = *context.n;
+        const int nind_val = *context.nind;
+        std::vector<double> x_fortran(context.x, context.x + n_val);
+        std::vector<double> x_cpp(context.x, context.x + n_val);
+        std::vector<double> g_fortran(context.g, context.g + n_val);
+        std::vector<double> g_cpp(context.g, context.g + n_val);
+        std::vector<double> s_fortran(context.s, context.s + n_val);
+        std::vector<double> s_cpp(context.s, context.s + n_val);
+        std::vector<double> w_fortran(context.w, context.w + n_val);
+        std::vector<double> w_cpp(context.w, context.w + n_val);
+        std::vector<double> y_fortran(context.y, context.y + n_val);
+        std::vector<double> y_cpp(context.y, context.y + n_val);
+        std::vector<double> r_fortran(context.r, context.r + n_val);
+        std::vector<double> r_cpp(context.r, context.r + n_val);
+        std::vector<double> d_fortran(context.d, context.d + n_val);
+        std::vector<double> d_cpp(context.d, context.d + n_val);
+        std::vector<double> sprev_fortran(context.sprev, context.sprev + n_val);
+        std::vector<double> sprev_cpp(context.sprev, context.sprev + n_val);
+        int iter_fortran = *context.iter;
+        int iter_cpp = *context.iter;
+        int rbdtype_fortran = 0;
+        int rbdtype_cpp = 0;
+        int rbdind_fortran = 0;
+        int rbdind_cpp = 0;
+        int inform_fortran = 0;
+        int inform_cpp = 0;
+        packmol_cg_fortran_c(
+            context.nind, context.ind, context.n, x_fortran.data(), context.m, context.lambda,
+            context.rho, g_fortran.data(), context.delta, context.l, context.u, context.eps,
+            context.epsnqmp, context.maxitnqmp, context.maxit, context.nearlyq, context.gtype,
+            context.htvtype, context.trtype, context.iprint, context.ncomp, s_fortran.data(),
+            &iter_fortran, &rbdtype_fortran, &rbdind_fortran, &inform_fortran, w_fortran.data(),
+            y_fortran.data(), r_fortran.data(), d_fortran.data(), sprev_fortran.data(),
+            context.theta, context.sterel, context.steabs, context.epsrel, context.epsabs,
+            context.infrel, context.infabs
+        );
+        g_cg_active_call_id = cg_call_counter;
+        cg_cpp_full(
+            context.nind, context.ind, context.n, x_cpp.data(), context.m, context.lambda,
+            context.rho, g_cpp.data(), context.delta, context.l, context.u, context.eps,
+            context.epsnqmp, context.maxitnqmp, context.maxit, context.nearlyq, context.gtype,
+            context.htvtype, context.trtype, context.iprint, context.theta, context.sterel,
+            context.steabs, context.epsrel, context.epsabs, context.infabs, s_cpp.data(),
+            w_cpp.data(), y_cpp.data(), r_cpp.data(), d_cpp.data(), sprev_cpp.data(), &iter_cpp,
+            &rbdtype_cpp, &rbdind_cpp, &inform_cpp
+        );
+        g_cg_active_call_id = 0;
+        double diff_s_max = 0.0;
+        for (int i = 0; i < nind_val; ++i) {
+            diff_s_max = std::max(diff_s_max, std::abs(s_fortran[i] - s_cpp[i]));
+        }
+        std::fprintf(
+            stderr,
+            "[gencan-cg-compare] call=%d nind=%d fortran_inform=%d fortran_iter=%d cpp_inform=%d cpp_iter=%d diff_s_max=%.17e fortran_snorm2=%.17e cpp_snorm2=%.17e\n",
+            cg_call_counter,
+            nind_val,
+            inform_fortran,
+            iter_fortran,
+            inform_cpp,
+            iter_cpp,
+            diff_s_max,
+            norm2_kernel(nind_val, s_fortran.data()),
+            norm2_kernel(nind_val, s_cpp.data())
+        );
+    }
+    if (use_fortran) {
+        packmol_cg_fortran_c(
+            context.nind, context.ind, context.n, context.x, context.m, context.lambda,
+            context.rho, context.g, context.delta, context.l, context.u, context.eps,
+            context.epsnqmp, context.maxitnqmp, context.maxit, context.nearlyq, context.gtype,
+            context.htvtype, context.trtype, context.iprint, context.ncomp, context.s,
+            context.iter, context.rbdtype, context.rbdind, context.inform, context.w,
+            context.y, context.r, context.d, context.sprev, context.theta, context.sterel,
+            context.steabs, context.epsrel, context.epsabs, context.infrel, context.infabs
+        );
+        if (trace) {
+            std::fprintf(
+                stderr,
+                "[gencan-cg-trace] call=%d kernel=fortran inform=%d iter=%d rbdtype=%d rbdind=%d snorm2=%.17e\n",
+                cg_call_counter,
+                *context.inform,
+                *context.iter,
+                *context.rbdtype,
+                *context.rbdind,
+                norm2_kernel(*context.nind, context.s)
+            );
+        }
+        return;
+    }
     switch (active_impl_mode()) {
         case GencanImplMode::kFortran:
             packmol_cg_fortran_c(
@@ -523,6 +817,18 @@ void run_cg_context_cpp(const GencanCgContext& context) {
                 context.rbdtype, context.rbdind, context.inform
             );
             g_cg_active_call_id = 0;
+            if (trace) {
+                std::fprintf(
+                    stderr,
+                    "[gencan-cg-trace] call=%d kernel=cpp inform=%d iter=%d rbdtype=%d rbdind=%d snorm2=%.17e\n",
+                    cg_call_counter,
+                    *context.inform,
+                    *context.iter,
+                    *context.rbdtype,
+                    *context.rbdind,
+                    norm2_kernel(*context.nind, context.s)
+                );
+            }
             return;
     }
 }

@@ -177,10 +177,31 @@ set_tests_properties(test_setsizes PROPERTIES WORKING_DIRECTORY "${CMAKE_SOURCE_
 
 add_executable(test_eval_objective_compare_probe component/test_eval_objective_compare_probe.f90)
 target_link_libraries(test_eval_objective_compare_probe PRIVATE packmol_test_support packmol_core)
+add_executable(test_eval_gradient_compare_probe component/test_eval_gradient_compare_probe.f90)
+target_link_libraries(test_eval_gradient_compare_probe PRIVATE packmol_test_support packmol_core)
+add_executable(test_eval_init1_compare_probe component/test_eval_init1_compare_probe.f90)
+target_link_libraries(test_eval_init1_compare_probe PRIVATE packmol_test_support packmol_core)
+add_executable(test_eval_reduced_compare_probe component/test_eval_reduced_compare_probe.f90)
+target_link_libraries(test_eval_reduced_compare_probe PRIVATE packmol_test_support packmol_core)
+add_executable(test_cg_direct_compare_probe component/test_cg_direct_compare_probe.f90)
+target_link_libraries(test_cg_direct_compare_probe PRIVATE packmol_test_support packmol_core)
+add_executable(test_cg_direct_compare_full_probe component/test_cg_direct_compare_full_probe.f90)
+target_link_libraries(test_cg_direct_compare_full_probe PRIVATE packmol_test_support packmol_core)
+add_test(
+    NAME test_cg_direct_compare
+    COMMAND
+        ${Python3_EXECUTABLE}
+        ${CMAKE_SOURCE_DIR}/tests/component/check_cg_direct_compare.py
+        $<TARGET_FILE:test_cg_direct_compare_probe>
+        ${CMAKE_SOURCE_DIR}/testing/input_files/water_box.inp
+)
+set_tests_properties(test_cg_direct_compare PROPERTIES LABELS "component;gencan")
 
 packmol_add_test(test_gencan_hessian_diff gencan/test_gencan_hessian_diff.f90 gencan)
 packmol_add_test(test_gencan_eval_wrappers gencan/test_gencan_eval_wrappers.f90 gencan)
 packmol_add_test(test_gencan_calchd gencan/test_gencan_calchd.f90 gencan)
+add_executable(test_runtime_pgencan_probe gencan/test_runtime_pgencan_probe.f90)
+target_link_libraries(test_runtime_pgencan_probe PRIVATE packmol_test_support packmol_core)
 set_tests_properties(
     test_gencan_wrappers
     test_gencan_hessian_diff

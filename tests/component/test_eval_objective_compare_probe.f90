@@ -18,14 +18,16 @@ program test_eval_objective_compare_probe
 
    integer :: n, inform_fortran
    integer(c_int) :: inform_cpp, used_cpp
-   double precision :: f_fortran, f_cpp, f_fortran_perturbed, f_cpp_perturbed
+   double precision :: f_fortran, f_cpp, f_cpp_repeat, f_fortran_perturbed, f_cpp_perturbed
    double precision :: fortran_fdist, fortran_frest, fortran_pair_sum, fortran_constraint_sum
    double precision :: cpp_fdist, cpp_frest, cpp_pair_sum, cpp_constraint_sum
+   double precision :: cpp_fdist_repeat, cpp_frest_repeat, cpp_pair_sum_repeat, cpp_constraint_sum_repeat
    double precision :: fortran_fdist_perturbed, fortran_frest_perturbed
    double precision :: cpp_fdist_perturbed, cpp_frest_perturbed
    double precision :: fortran_pair_sum_perturbed, fortran_constraint_sum_perturbed
    double precision :: cpp_pair_sum_perturbed, cpp_constraint_sum_perturbed
    integer :: fortran_pair_count, fortran_constraint_count, cpp_pair_count, cpp_constraint_count
+   integer :: cpp_pair_count_repeat, cpp_constraint_count_repeat
    integer :: fortran_pair_count_perturbed, fortran_constraint_count_perturbed
    integer :: cpp_pair_count_perturbed, cpp_constraint_count_perturbed
    character(len=1000) :: input_path
@@ -70,6 +72,14 @@ program test_eval_objective_compare_probe
    cpp_pair_count = pair_penalty_count
    cpp_constraint_count = constraint_penalty_count
 
+   call packmol_evalal_cpp_direct_c(n, x_cpp, 1_c_int, lambda, rho, f_cpp_repeat, inform_cpp, used_cpp)
+   cpp_fdist_repeat = fdist
+   cpp_frest_repeat = frest
+   cpp_pair_sum_repeat = pair_penalty_sum
+   cpp_constraint_sum_repeat = constraint_penalty_sum
+   cpp_pair_count_repeat = pair_penalty_count
+   cpp_constraint_count_repeat = constraint_penalty_count
+
     call computef(n, x_perturbed, f_fortran_perturbed)
    fortran_fdist_perturbed = fdist
    fortran_frest_perturbed = frest
@@ -95,6 +105,12 @@ program test_eval_objective_compare_probe
    write(*,'(A,1X,I0,1X,A,1X,I0,1X,A,1X,I0,1X,A,1X,I0)') &
       'pair_count_fortran', fortran_pair_count, 'pair_count_cpp', cpp_pair_count, &
       'constraint_count_fortran', fortran_constraint_count, 'constraint_count_cpp', cpp_constraint_count
+   write(*,'(A,1X,ES24.16,1X,A,1X,ES24.16,1X,A,1X,ES24.16,1X,A,1X,ES24.16)') &
+      'repeat_f_cpp', f_cpp_repeat, 'repeat_fdist_cpp', cpp_fdist_repeat, &
+      'repeat_frest_cpp', cpp_frest_repeat, 'repeat_pair_sum_cpp', cpp_pair_sum_repeat
+   write(*,'(A,1X,ES24.16,1X,A,1X,I0,1X,A,1X,I0)') &
+      'repeat_constraint_sum_cpp', cpp_constraint_sum_repeat, &
+      'repeat_pair_count_cpp', cpp_pair_count_repeat, 'repeat_constraint_count_cpp', cpp_constraint_count_repeat
    write(*,'(A,1X,ES24.16,1X,A,1X,ES24.16,1X,A,1X,ES24.16,1X,A,1X,ES24.16)') &
       'perturbed_f_fortran', f_fortran_perturbed, 'perturbed_f_cpp', f_cpp_perturbed, &
       'perturbed_fdist_fortran', fortran_fdist_perturbed, 'perturbed_fdist_cpp', cpp_fdist_perturbed
